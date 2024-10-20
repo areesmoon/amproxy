@@ -8,6 +8,11 @@ import math
 import yaml
 
 
+# NOTE:
+# if error running executable binary, run to fix:
+# sudo mount /tmp -o remount,exec
+
+
 def db_escape_field(field):
     return field.replace("'", "''")
 
@@ -399,8 +404,10 @@ def app_scale():
                 update_haproxy_cfg(app_id)
                 
                 docker_compose(yaml_itr, "--no-start", True)
-                run_docker_command("kill -s HUP " + app + "-proxy")
                 app_start(True)
+                
+                #refresh service
+                run_docker_command("kill -s HUP " + app + "-proxy")
         
             elif(new_replicas < old_replicas):
                 
@@ -484,10 +491,12 @@ def app_update():
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
-                run_docker_command("kill -s HUP " + app + "-proxy")
                 
                 # wait until finish and start app
                 app_start(True)
+                
+                #refresh service
+                run_docker_command("kill -s HUP " + app + "-proxy")
                 
                 # once the routine is entering here, it means already running
                 # so, delete the first 8 and replace with 5 new
@@ -499,10 +508,12 @@ def app_update():
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
-                run_docker_command("kill -s HUP " + app + "-proxy")
                 
                 # wait until finish and start app
                 app_start(True)
+                
+                #refresh service
+                run_docker_command("kill -s HUP " + app + "-proxy")
                 
             else:
                 print("Image is already up to date. Skipped")
