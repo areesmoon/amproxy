@@ -244,7 +244,7 @@ def create_iterable_service(app_id, n):
     
 def info_app_not_found(command):
     print(f'''No found application to {command}.
-To start an application, prepare the docker-compose.yaml file and run the following command:
+To start an application, prepare the docker-compose.yaml.template file and run the following command:
 {app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_backend_server
 Example: create app hello-world -p 81:80:82 --replicas=10''')
 
@@ -255,9 +255,9 @@ def app_create(app):
         if ports is None: ports = "80:80:8040"
         replicas = int(known_args["replicas"])
         
-        # load docker-compose.yaml or supplied file
+        # load docker-compose.yaml.template or supplied file
         file_dc = get_arg_after("-f")
-        file_dc = file_dc if file_dc is not None else "docker-compose.yaml"
+        file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
         f = open(file_dc, 'r')
         tpl_dc = f.read()
         
@@ -716,7 +716,7 @@ if len(args)>=2:
     else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
-To start an application, edit the existing docker-compose.yaml template file and run the following command:
+To start an application, edit the existing docker-compose.yaml.template template file and run the following command:
 {app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_of_backend_server
 
 Example: {app_name} create app hello-world -p 81:80:82 --replicas=10

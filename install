@@ -1,0 +1,3 @@
+#!/usr/bin/bash
+pyinstaller amproxy.py --onefile
+sudo cp dist/amproxy /usr/local/bin/

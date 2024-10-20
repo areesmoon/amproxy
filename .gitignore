@@ -3,6 +3,7 @@ www/
 _itr.yaml
 _non_itr.yaml
 _proxy.yaml
+stats
 auto_generated/
 
 # Byte-compiled / optimized / DLL files
