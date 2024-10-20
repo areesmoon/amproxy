@@ -596,6 +596,7 @@ for arg in args1:
     if arg=='--start': arg = '-s'
     if arg=='--force-update': arg = '-fu'
     if arg=='--file': arg = '-f'
+    if arg=='--version': arg = '-v'
     args.append(arg)
 
 known_args = {}
@@ -709,6 +710,9 @@ if len(args)>=2:
     elif args[1]=="proc": app_get_proc()
     elif args[1]=="top": app_get_top()
     elif args[1]=="docker": app_docker()
+    elif args[1]=="-v":
+        print("AMProxy v1.0.3")
+        print("License: GNU General Public License v3")
     else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
@@ -739,6 +743,7 @@ Available parameters:
 -i, --interactive   Keep STDIN open even if not attached
 -s, --start         To directly start application after created
 -f, --file [file]   Custom yaml file
+-v, --version       Show current application version
 
 Upon started, your application is available at the following URL:
 Application service: http://localhost:external_port
