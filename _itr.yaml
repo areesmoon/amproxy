@@ -1,0 +1,255 @@
+
+services:
+    submit-confbay-1:
+        container_name: submit-confbay-1
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-2:
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-3:
+        container_name: submit-confbay-3
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-4:
+        container_name: submit-confbay-4
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-5:
+        container_name: submit-confbay-5
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-6:
+        container_name: submit-confbay-6
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-7:
+        container_name: submit-confbay-7
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-8:
+        container_name: submit-confbay-8
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-9:
+        container_name: submit-confbay-9
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+    submit-confbay-10:
+        container_name: submit-confbay-10
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+    submit-confbay-2:
+        image: areesmoon/submit-confbay1
+        container_name: submit-confbay-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - submit-confbay-net
+networks:
+    submit-confbay-net:
+        external: true
