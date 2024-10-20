@@ -517,13 +517,12 @@ str_args = " ".join(sys.argv).replace("=", " ")
 args1 = str_args.split(" ")
 args = []
 for arg in args1:
-    match arg:
-        case '--port': arg = '-p'
-        case '--replicas': arg = '-r'
-        case '--interactive': arg = '-i'
-        case '--start': arg = '-s'
-        case '--force-update': arg = '-fu'
-        case '--file': arg = '-f'
+    if arg=='--port': arg = '-p'
+    if arg=='--replicas': arg = '-r'
+    if arg=='--interactive': arg = '-i'
+    if arg=='--start': arg = '-s'
+    if arg=='--force-update': arg = '-fu'
+    if arg=='--file': arg = '-f'
     args.append(arg)
 
 known_args = {}
