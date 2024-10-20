@@ -1,5 +1,8 @@
 my.env
 www/
+_itr.yaml
+_non_itr.yaml
+_proxy.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
