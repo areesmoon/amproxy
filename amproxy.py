@@ -6,6 +6,7 @@ import os
 import sqlite3
 import math
 import yaml
+import re
 
 
 # NOTE:
@@ -67,8 +68,11 @@ def list2json(list):
     str_resp = ''.join(map(str, list))
     return json.loads(str_resp)
 
+def split_command_args(command):
+    return command.split(" ")
+
 def run_command(command):
-    # print("Running command: {}".format(command))
+    if check_arg("-d"): print("Running command: {}".format(command))
     p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     list_resp = p.stdout.readlines()
     new_list_resp = []
@@ -169,6 +173,11 @@ def update_haproxy_cfg(app_id):
     f = open(dir_cfg + "/" + "haproxy.cfg", "w")
     f.write(cfg + "\n")
     f.close()
+    
+def refresh_service(app_id):
+    row_app = db_select("tb_app", "id", app_id)
+    update_haproxy_cfg(app_id)
+    run_docker_command("kill -s HUP " + row_app[1] + "-proxy")
     
 def create_proxy_service():
     proxy= replace_variable(tpl_proxy)
@@ -304,7 +313,7 @@ def app_start(scale=False):
     if len(row)==1:
         print("Starting application " + row[0][1])
         f_status = " -f \"status=created\"" if scale else ""
-        resp = run_docker_command("ps -a -f \"name=" + row[0][1] + "-([0-9]|proxy)\" --format {{.Names}}" + f_status)
+        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-([0-9]+$|proxy$)\" --format {{.Names}}" + f_status)
         if(len(resp)>0):
             for container in resp:
                 print("Starting app resource " + container)
@@ -323,7 +332,7 @@ def app_stop():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         print("Stopping application " + row[0][1])
-        resp = run_docker_command("ps -a -f \"name=" + row[0][1] + "-([0-9]|proxy)\" --format {{.Names}}")
+        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-([0-9]+$|proxy$)\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
                 print("Stopping app resource " + container)
@@ -352,7 +361,7 @@ def app_delete():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         app = row[0][1]
-        resp = run_docker_command("ps -a -f \"name=" + app + "-([0-9]|proxy)\" --format {{.Names}}")
+        resp = run_docker_command("ps -a -f \"name=^" + app + "-([0-9]+$|proxy$)\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
                 print("Deleting app resource " + container)
@@ -385,7 +394,6 @@ def app_scale():
         row = db_select("tb_app", "name", app)
         if len(row)>=1:
             app_id = row[0]
-            app = row[1]
             print("Application exists, scaling is possible")
             
             old_replicas = db_execute("select count(*) as num from tb_ctn where app_id = '" + str(app_id) + "'")[0][0]
@@ -400,14 +408,15 @@ def app_scale():
                 # create iterable container
                 create_iterable_service(app_id, (new_replicas - old_replicas))
                 
-                # update cfg based on available container
-                update_haproxy_cfg(app_id)
-                
+                # compose new container
                 docker_compose(yaml_itr, "--no-start", True)
+                
                 app_start(True)
                 
                 #refresh service
-                run_docker_command("kill -s HUP " + app + "-proxy")
+                refresh_service(app_id)
+                
+                print("App backed server has been up-scaled into " + str(new_replicas))
         
             elif(new_replicas < old_replicas):
                 
@@ -419,11 +428,10 @@ def app_scale():
                 # delete first container
                 delete_n_first_container(app_id, old_replicas - new_replicas)
                 
-                # get the rest for updating cfg
-                update_haproxy_cfg(app_id)
+                #refresh service
+                refresh_service(app_id)
                 
-                run_docker_command("kill -s HUP " + app + "-proxy")
-                print("App backed server has been down scaled into " + str(new_replicas))
+                print("App backed server has been down-scaled into " + str(new_replicas))
     else:
         info_app_not_found("scale")
 
@@ -483,11 +491,11 @@ def app_update():
                 # delete 25% first container
                 delete_n_first_container(app_id, num_del)
                 
+                #refresh service
+                refresh_service(app_id)
+                
                 # create 50% new container
                 create_iterable_service(app_id, num_add)
-                
-                # update cfg based on available container
-                update_haproxy_cfg(app_id)
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
@@ -496,15 +504,17 @@ def app_update():
                 app_start(True)
                 
                 #refresh service
-                run_docker_command("kill -s HUP " + app + "-proxy")
+                refresh_service(app_id)
                 
                 # once the routine is entering here, it means already running
                 # so, delete the first 8 and replace with 5 new
                 delete_n_first_container(app_id, replicas-num_del)
-                create_iterable_service(app_id, replicas-num_add)
                 
-                # update cfg based on available container
-                update_haproxy_cfg(app_id)
+                #refresh service
+                refresh_service(app_id)
+                
+                # add 50% rest iterable service
+                create_iterable_service(app_id, replicas-num_add)
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
@@ -513,7 +523,7 @@ def app_update():
                 app_start(True)
                 
                 #refresh service
-                run_docker_command("kill -s HUP " + app + "-proxy")
+                refresh_service(app_id)
                 
             else:
                 print("Image is already up to date. Skipped")
@@ -522,12 +532,64 @@ def app_update():
         
     else:
         info_app_not_found("update")
+        
+def remove_double_space(txt):
+    x = re.search("  ", txt)
+    while x:
+        txt = txt.replace("  ", " ")
+        x = re.search("  ", txt)
+    return txt
+
+def app_get_top():
+    row_app = db_execute("select * from tb_app limit 0,1")
+    if len(row_app)==1:
+        app = row_app[0][1]
+        resp = run_docker_command("stats --no-stream --format \"table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}\t{{.MemUsage}}\"")
+        n=0
+        total_cpu = 0.00
+        total_mem = 0.00
+        for i in resp:
+            if n==0: print(i)
+            else:
+                ar = remove_double_space(i).split(" ")
+                if re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
+                    total_cpu = total_cpu + float(ar[1].replace("%",""))
+                    total_mem = total_mem + float(ar[2].replace("%",""))
+                    print(i)
+            n=n+1
+        print("\nSUMMARY")
+        print("CPU %\tMEM %")
+        print("" + str(total_cpu)[:5] + "%\t" + str(total_mem)[:5] + "%")
+    else:
+        info_app_not_found("get info")
+        
+def app_get_proc():
+    row_app = db_execute("select * from tb_app limit 0,1")
+    if len(row_app)==1:
+        app_id = row_app[0][0]
+        app = row_app[0][1]
+        resp = run_docker_command("ps -f \"name=" + app + "-([0-9]+$)\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
+        for i in resp:
+            print(i)
+    else:
+        info_app_not_found("get info")
+        
+def app_docker():
+    if(args[2]=='stats'): args.append("--no-stream")
+    temp_args = args
+    temp_args.pop(0)
+    temp_args.pop(0)
+    command = " ".join(temp_args)
+    resp = run_docker_command(command)
+    for i in resp:
+        print(i)
 
 
 str_args = " ".join(sys.argv).replace("=", " ")
 args1 = str_args.split(" ")
 args = []
 for arg in args1:
+    if arg=='--debug': arg = '-d'
     if arg=='--port': arg = '-p'
     if arg=='--replicas': arg = '-r'
     if arg=='--interactive': arg = '-i'
@@ -542,7 +604,8 @@ known_args["ports"] = get_arg_after("-p")
 known_args["replicas"] = get_arg_after("-r")
 known_args["file"] = get_arg_after("-f")
 
-# print(args)
+if check_arg("-d"):
+    print("Passed Arguments: " + str(args))
 
 app_title = "AMProxy"
 app_name = "amproxy"
@@ -637,18 +700,15 @@ if not os.path.exists(file_db):
 obj_replace = {}
 
 if len(args)>=2:
-    if args[1]=="create":
-        app_create(args[2])
-    elif args[1]=="start":
-        app_start()
-    elif args[1]=="stop":
-        app_stop()
-    elif args[1]=="delete":
-        app_delete()
-    elif args[1]=="scale":
-        app_scale()        
-    elif args[1]=="update":
-        app_update()   
+    if args[1]=="create": app_create(args[2])
+    elif args[1]=="start": app_start()
+    elif args[1]=="stop": app_stop()
+    elif args[1]=="delete": app_delete()
+    elif args[1]=="scale": app_scale()        
+    elif args[1]=="update": app_update()
+    elif args[1]=="proc": app_get_proc()
+    elif args[1]=="top": app_get_top()
+    elif args[1]=="docker": app_docker()
     else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
@@ -664,9 +724,13 @@ stop        To stop currently running application
 scale       To scale up / down the running application, example: {app_name} scale hello-world --replicas=20
 update      To update container with the newest image, done half by half
 delete      To delete the application and all resources
+proc        To show running instance of backend service
+top         To show CPU and memory usage by all resources
+docker      To run any docker's related command (followed by docker related command's parameters)
 
 
 Available parameters:
+-d, --debug         Show command run by AMProxy internal process for debug purpose
 -p, --port          Ports setting, consists of three ports, external_port:internal_port:statistic_port
                     external_port: externally accessible port for your application service
                     internal_port: internal / service container port (for http usually 80)
