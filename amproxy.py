@@ -628,18 +628,17 @@ obj_replace = {}
 if len(args)>=2:
     if args[1]=="create":
         app_create(args[2])
-    if args[1]=="start":
+    elif args[1]=="start":
         app_start()
-    if args[1]=="stop":
+    elif args[1]=="stop":
         app_stop()
-    if args[1]=="delete":
+    elif args[1]=="delete":
         app_delete()
-    if args[1]=="scale":
+    elif args[1]=="scale":
         app_scale()        
-    if args[1]=="update":
+    elif args[1]=="update":
         app_update()   
-    if args[1]==_:
-        print(f'''
+    else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
 To start an application, edit the existing docker-compose.yaml template file and run the following command:
