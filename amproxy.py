@@ -220,7 +220,6 @@ def create_iterable_service(app_id, n):
     # create service iterable
     svc_iterable = "services:\n"
     for i in range(max_no + 1, max_no + n + 1):
-        print(i)
         svc_iterable = svc_iterable + "\n" + ctn_iterable.replace("${no}", str(i)) + "\n" + container_network
         db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(i) + "')")    
     svc_iterable = svc_iterable + "\n" + network
