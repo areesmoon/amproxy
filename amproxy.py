@@ -647,9 +647,15 @@ def app_logs():
                 # create proxy docker compose file
                 create_proxy_service(app_id, yaml_logs)
             else:
-                ar_no = get_arg(2).split(":")
-                if len(ar_no)==1:
-                    ar_no.append(ar_no[0])
+                if get_arg(2)=='worker':
+                    tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
+                    ar_no = []
+                    ar_no.append(tmp_row[0][0])
+                    ar_no.append(tmp_row[0][1])
+                else:
+                    ar_no = get_arg(2).split(":")
+                    if len(ar_no)==1:
+                        ar_no.append(ar_no[0])
                 create_iterable_service(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
         
         # execute docker compose up
@@ -809,7 +815,7 @@ if len(args)>=2:
     elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
-        print("AMProxy v1.0.4")
+        print("AMProxy v1.0.5")
         print("License: GNU General Public License v3")
         print("Author: Aris Munawar, S. T., M. Sc.")
         print("Medium: https://medium.com/@areesmoon")
@@ -833,7 +839,7 @@ delete      To delete the application and all resources
 proc        To show running instance of backend service
 top         To show CPU and memory usage by all resources
 docker      To run any docker's related command (followed by docker related command's parameters)
-logs        To see log of the running process, option: proxy, [start_no]:[stop_no]
+logs        To see log of the running process, option: proxy, worker, or [worker_no]:[worker_no]
             Example: amproxy logs proxy (to see proxy logs)
                      amproxy logs 2:5 (to see log worker no 2 to 5)
 
