@@ -207,7 +207,7 @@ def create_proxy_service(app_id, yaml_file = None):
     f.write(clean_yaml(svc_proxy))
     f.close()
     
-def create_full_service(app_id, yaml_file=None):
+def create_service_full(app_id, yaml_file=None):
     
     update_obj_replace(app_id)
     
@@ -244,7 +244,7 @@ def create_full_service(app_id, yaml_file=None):
     f.write(clean_yaml(full_dc))
     f.close()
     
-def create_non_iterable_service(app_id):
+def create_service_non_iterable(app_id):
     update_obj_replace(app_id)
     
     row_app = db_select("tb_app", "id", app_id)
@@ -266,7 +266,7 @@ def create_non_iterable_service(app_id):
     f.write(clean_yaml(svc_non_iterable))
     f.close()
     
-def create_iterable_service(app_id, n, yaml_file = None, start_no = None, stop_no = None):
+def create_service_iterable(app_id, n, yaml_file = None, start_no = None, stop_no = None):
     #update variable
     update_obj_replace(app_id)
     
@@ -295,7 +295,8 @@ def create_iterable_service(app_id, n, yaml_file = None, start_no = None, stop_n
     svc_iterable = "services:\n"
     for i in range(start_no, stop_no):
         svc_iterable = svc_iterable + "\n" + ctn_iterable.replace("${no}", str(i)) + "\n" + container_network
-        db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(i) + "')")    
+        if yaml_file is None:
+            db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(i) + "')")
     svc_iterable = svc_iterable + "\n" + network
 
     yaml_file = yaml_file if yaml_file is not None else yaml_itr
@@ -335,10 +336,10 @@ def app_create(app):
         create_proxy_service()
         
         # create service non iterable
-        create_non_iterable_service(app_id)
+        create_service_non_iterable(app_id)
         
         # create service iterable
-        create_iterable_service(app_id, replicas)
+        create_service_iterable(app_id, replicas)
         
         # create config haproxy.cfg
         update_haproxy_cfg(app_id)
@@ -467,7 +468,7 @@ def app_scale():
                 update_obj_replace(app_id)
                 
                 # create iterable container
-                create_iterable_service(app_id, (new_replicas - old_replicas))
+                create_service_iterable(app_id, (new_replicas - old_replicas))
                 
                 # compose new container
                 docker_compose(yaml_itr, "--no-start", True)
@@ -556,7 +557,7 @@ def app_update():
                 refresh_service(app_id)
                 
                 # create 50% new container
-                create_iterable_service(app_id, num_add)
+                create_service_iterable(app_id, num_add)
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
@@ -575,7 +576,7 @@ def app_update():
                 refresh_service(app_id)
                 
                 # add 50% rest iterable service
-                create_iterable_service(app_id, replicas-num_add)
+                create_service_iterable(app_id, replicas-num_add)
                 
                 # deploy container & update config
                 docker_compose(yaml_itr, "--no-start", True)
@@ -604,20 +605,36 @@ def remove_double_space(txt):
 def app_get_top():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
+        app_id = row_app[0][0]
         app = row_app[0][1]
         resp = run_docker_command("stats --no-stream --format \"table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}\t{{.MemUsage}}\"")
-        n=0
+        
         total_cpu = 0.00
         total_mem = 0.00
-        for i in resp:
-            if n==0: print(i)
-            else:
-                ar = remove_double_space(i).split(" ")
-                if re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
-                    total_cpu = total_cpu + float(ar[1].replace("%",""))
-                    total_mem = total_mem + float(ar[2].replace("%",""))
-                    print(i)
-            n=n+1
+        header = False
+        proxy = False
+        rows = db_execute("SELECT id, no FROM tb_ctn WHERE app_id = '" + str(app_id) + "' ORDER BY no")
+        for row in rows:
+            n=0
+            for i in resp:
+                n = n + 1
+                if n==1:
+                    if not header:
+                        print(i)
+                        header = True
+                else:
+                    ar = remove_double_space(i).split(" ")
+                    if ar[0]==app + "-proxy":
+                        if not proxy:
+                            total_cpu = total_cpu + float(ar[1].replace("%",""))
+                            total_mem = total_mem + float(ar[2].replace("%",""))
+                            print(i)
+                            proxy = True
+                    elif ar[0]==app + "-" + str(row[1]):
+                        if re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
+                            total_cpu = total_cpu + float(ar[1].replace("%",""))
+                            total_mem = total_mem + float(ar[2].replace("%",""))
+                            print(i)
         print("\nSUMMARY")
         print("CPU %\tMEM %")
         print("" + str(total_cpu)[:5] + "%\t" + str(total_mem)[:5] + "%")
@@ -630,8 +647,23 @@ def app_get_proc():
         app_id = row_app[0][0]
         app = row_app[0][1]
         resp = run_docker_command("ps -f \"name=" + app + "-([0-9]+$)\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
-        for i in resp:
-            print(i)
+        header = False
+        rows = db_execute("SELECT id, no FROM tb_ctn WHERE app_id = '" + str(app_id) + "' ORDER BY no")
+        for row in rows:
+            n = 0
+            found = False
+            for i in resp:
+                if found: break
+                n = n + 1
+                if n==1:
+                    if not header:
+                        print(i)
+                        header = True
+                else:
+                    ar = remove_double_space(i).split(" ")
+                    if ar[0]==app + "-" + str(row[1]):
+                        print(i)
+                        found = True
     else:
         info_app_not_found("get info")
         
@@ -641,7 +673,7 @@ def app_logs():
         app_id = row_app[0][0]
         if get_arg(2)=='':
             # create full docker compose file
-            create_full_service(app_id, yaml_logs)
+            create_service_full(app_id, yaml_logs)
         else:
             if get_arg(2)=='proxy':
                 # create proxy docker compose file
@@ -656,7 +688,7 @@ def app_logs():
                     ar_no = get_arg(2).split(":")
                     if len(ar_no)==1:
                         ar_no.append(ar_no[0])
-                create_iterable_service(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
+                create_service_iterable(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
         
         # execute docker compose up
         print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")

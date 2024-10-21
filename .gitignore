@@ -6,5 +6,6 @@
 !amproxy.py
 !template.latex
 !docker-compose.yaml.template
+!make
 !install
 !README.md

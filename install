@@ -1,3 +1,2 @@
-#!/usr/bin/bash
-pyinstaller amproxy.py --onefile
-sudo cp dist/amproxy /usr/local/bin/
+#!/bin/sh
+yes | cp dist/amproxy /usr/local/bin/
