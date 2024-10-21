@@ -772,8 +772,12 @@ if len(args)>=2:
     elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
-        print("AMProxy v1.0.3")
+        print("AMProxy v1.0.4")
         print("License: GNU General Public License v3")
+        print("Author: Aris Munawar, S. T., M. Sc.")
+        print("Medium: https://medium.com/@areesmoon")
+        print("Github: https://github.com/areesmoon/")
+        print("Docker: https://hub.docker.com/u/areesmoon")
     else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
