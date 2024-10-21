@@ -1,0 +1,156 @@
+
+services:
+    my-test-app-proxy:
+        image: haproxytech/haproxy-alpine:2.4
+        container_name: my-test-app-proxy
+        restart: always
+        ports:
+            - 82:80
+            - 802:8404
+        volumes:
+            - ./auto_generated/cfg:/usr/local/etc/haproxy:ro
+        networks:
+            - my-test-app-net
+    my-test-app-1:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-1
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-2:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-2
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-3:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-3
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-4:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-4
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-5:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-5
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-6:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-6
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-7:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-7
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-8:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-8
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-9:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-9
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+    my-test-app-10:
+        image: areesmoon/submit-confbay
+        container_name: my-test-app-10
+        restart: always
+        env_file: my.env
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        volumes:
+            - ./www/invoices:/var/www/invoices
+            - ./www/receipts:/var/www/receipts
+            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
+            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments
+        networks:
+            - my-test-app-net
+networks:
+    my-test-app-net:
+        external: true

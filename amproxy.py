@@ -7,12 +7,15 @@ import sqlite3
 import math
 import yaml
 import re
+import signal
 
 
 # NOTE:
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
+def signal_handler(sig, frame):
+    sys.exit(0)
 
 def db_escape_field(field):
     return field.replace("'", "''")
@@ -189,9 +192,44 @@ def create_proxy_service():
     f.write(clean_yaml(svc_proxy))
     f.close()
     
+def create_full_service(app_id):
+    row_app = db_select("tb_app", "id", app_id)
+    update_obj_replace(row_app[1], row_app[2])
+    
+    proxy = replace_variable(tpl_proxy)
+    container_network = replace_variable(tpl_container_network)
+    network = replace_variable(tpl_network)
+    
+    # full docker compose file
+    full_dc = "services:\n" + proxy + "\n" + container_network
+    
+    # get non iterable
+    tpl_dc = row_app[3]
+    ctn_non_iterable = get_non_iterable_container_tpl(tpl_dc)
+    ctn_non_iterable = clean_yaml(ctn_non_iterable)
+    if(ctn_non_iterable!=''):
+        full_dc = full_dc + "\n" + ctn_non_iterable + "\n" + container_network
+    
+    # iterable
+    ctn_iterable = get_iterable_container_tpl(tpl_dc)
+    ctn_iterable = clean_yaml(ctn_iterable)
+    # iterate through record
+    rows = db_execute("SELECT no from tb_ctn where app_id = '" + str(app_id) + "'")
+    for row in rows:
+        full_dc = full_dc + "\n" + ctn_iterable.replace("${no}", str(row[0])) + "\n" + container_network
+        
+    # close full_dc
+    full_dc = full_dc + "\n" + network
+    
+    # write to file
+    f = open(yaml_full, "w")
+    f.write(clean_yaml(full_dc))
+    f.close()
+    
 def create_non_iterable_service(app_id):
     row_app = db_select("tb_app", "id", app_id)
     app = row_app[1]
+    
     tpl_dc = row_app[3]
     
     #update variable
@@ -574,6 +612,19 @@ def app_get_proc():
     else:
         info_app_not_found("get info")
         
+def app_logs():
+    row_app = db_execute("select * from tb_app limit 0,1")
+    if len(row_app)==1:
+        # create full docker compose file
+        create_full_service(row_app[0][0])
+        
+        # execute docker compose up
+        print("Please do not press CTRL + C to prevent containers stop, close the window instead.")
+        input()
+        docker_compose("docker-compose.yaml", "", True)
+    else:
+        info_app_not_found("get info")
+        
 def app_docker():
     if(args[2]=='stats'): args.append("--no-stream")
     temp_args = args
@@ -585,7 +636,13 @@ def app_docker():
         print(i)
 
 
+# capture CTRL + C
+signal.signal(signal.SIGINT, signal_handler)
+
+# get args
 str_args = " ".join(sys.argv).replace("=", " ")
+
+# simplify args
 args1 = str_args.split(" ")
 args = []
 for arg in args1:
@@ -599,12 +656,14 @@ for arg in args1:
     if arg=='--version': arg = '-v'
     args.append(arg)
 
+# known args
 known_args = {}
 known_args["app"] = get_arg_after("-a")
 known_args["ports"] = get_arg_after("-p")
 known_args["replicas"] = get_arg_after("-r")
 known_args["file"] = get_arg_after("-f")
 
+# debug args
 if check_arg("-d"):
     print("Passed Arguments: " + str(args))
 
@@ -669,6 +728,7 @@ file_db = dir_db + "/" + app_name + ".db"
 yaml_proxy = "_proxy.yaml"
 yaml_non_itr = "_non_itr.yaml"
 yaml_itr = "_itr.yaml"
+yaml_full = "docker-compose.yaml"
 
 if not os.path.exists(tmpdir):
     os.mkdir(tmpdir)        
@@ -709,6 +769,7 @@ if len(args)>=2:
     elif args[1]=="update": app_update()
     elif args[1]=="proc": app_get_proc()
     elif args[1]=="top": app_get_top()
+    elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
         print("AMProxy v1.0.3")
