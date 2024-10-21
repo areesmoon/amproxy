@@ -52,6 +52,11 @@ def check_arg(arg):
             return True
     return False
 
+def get_arg(index):
+    global args
+    if len(args) >= index + 1: return args[index]
+    else: return ""
+
 def get_arg_after(after):
     global args
     for i in range(0, len(args)-1):
@@ -126,8 +131,15 @@ def network_delete(app):
     elif(resp[0]==get_app_prefix(app) + 'net'):
         print("Network " + get_app_prefix(app) + 'net' + " is deleted")
         
-def update_obj_replace(app, ports):
+def update_obj_replace(app_id):
+    row_app = db_select("tb_app", "id", app_id)
+    app = row_app[1]
+    ports = row_app[2]
+    
+    #app name
     obj_replace["app"] = app
+    
+    # ports
     ports = ports
     ar_port = ports.split(":")
     obj_replace["external_port"] = ar_port[0]
@@ -182,19 +194,22 @@ def refresh_service(app_id):
     update_haproxy_cfg(app_id)
     run_docker_command("kill -s HUP " + row_app[1] + "-proxy")
     
-def create_proxy_service():
+def create_proxy_service(app_id, yaml_file = None):
+    update_obj_replace(app_id)
+    
     proxy= replace_variable(tpl_proxy)
     container_network = replace_variable(tpl_container_network)
     network = replace_variable(tpl_network)
         
     svc_proxy = "services:\n" + proxy + "\n" + container_network + "\n" + network
-    f = open(yaml_proxy, "w")
+    yaml_file = yaml_file if yaml_file is not None else yaml_proxy
+    f = open(yaml_file, "w")
     f.write(clean_yaml(svc_proxy))
     f.close()
     
-def create_full_service(app_id):
-    row_app = db_select("tb_app", "id", app_id)
-    update_obj_replace(row_app[1], row_app[2])
+def create_full_service(app_id, yaml_file=None):
+    
+    update_obj_replace(app_id)
     
     proxy = replace_variable(tpl_proxy)
     container_network = replace_variable(tpl_container_network)
@@ -204,7 +219,9 @@ def create_full_service(app_id):
     full_dc = "services:\n" + proxy + "\n" + container_network
     
     # get non iterable
+    row_app = db_select("tb_app", "id", app_id)
     tpl_dc = row_app[3]
+    
     ctn_non_iterable = get_non_iterable_container_tpl(tpl_dc)
     ctn_non_iterable = clean_yaml(ctn_non_iterable)
     if(ctn_non_iterable!=''):
@@ -222,18 +239,16 @@ def create_full_service(app_id):
     full_dc = full_dc + "\n" + network
     
     # write to file
-    f = open(yaml_full, "w")
+    yaml_file = yaml_file if yaml_file is not None else yaml_full
+    f = open(yaml_file, "w")
     f.write(clean_yaml(full_dc))
     f.close()
     
 def create_non_iterable_service(app_id):
+    update_obj_replace(app_id)
+    
     row_app = db_select("tb_app", "id", app_id)
-    app = row_app[1]
-    
     tpl_dc = row_app[3]
-    
-    #update variable
-    update_obj_replace(app, row_app[2])
     
     # prepare network
     container_network = replace_variable(tpl_container_network)
@@ -251,13 +266,12 @@ def create_non_iterable_service(app_id):
     f.write(clean_yaml(svc_non_iterable))
     f.close()
     
-def create_iterable_service(app_id, n):
-    row_app = db_select("tb_app", "id", app_id)
-    app = row_app[1]
-    tpl_dc = row_app[3]
-    
+def create_iterable_service(app_id, n, yaml_file = None, start_no = None, stop_no = None):
     #update variable
-    update_obj_replace(app, row_app[2])
+    update_obj_replace(app_id)
+    
+    row_app = db_select("tb_app", "id", app_id)
+    tpl_dc = row_app[3]
     
     # prepare template
     container_network = replace_variable(tpl_container_network)
@@ -266,17 +280,26 @@ def create_iterable_service(app_id, n):
     # get main container image
     ctn_iterable = get_iterable_container_tpl(tpl_dc)
     
-    # max cotainer's no
-    max_no = db_execute("select ifnull(max(no),0)  as max_no from tb_ctn where app_id = '" + str(app_id) + "'")[0][0]
+    if start_no is None:    
+        start_no = db_execute("select ifnull(max(no),0)  as max_no from tb_ctn where app_id = '" + str(app_id) + "'")[0][0] + 1
+        
+    if stop_no is None:
+        stop_no = start_no + n
+    else:
+        stop_no = stop_no + 1
+        
+    # print("Start: " + str(start_no))
+    # print("Stop: " + str(stop_no))
     
     # create service iterable
     svc_iterable = "services:\n"
-    for i in range(max_no + 1, max_no + n + 1):
+    for i in range(start_no, stop_no):
         svc_iterable = svc_iterable + "\n" + ctn_iterable.replace("${no}", str(i)) + "\n" + container_network
         db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(i) + "')")    
     svc_iterable = svc_iterable + "\n" + network
 
-    f = open(yaml_itr, "w")
+    yaml_file = yaml_file if yaml_file is not None else yaml_itr
+    f = open(yaml_file, "w")
     f.write(clean_yaml(svc_iterable))
     f.close()
     
@@ -306,7 +329,7 @@ def app_create(app):
         app_id = row[0]
         
         # prepare replace var
-        update_obj_replace(app, ports)
+        update_obj_replace(app_id)
         
         # create service proxy
         create_proxy_service()
@@ -441,7 +464,7 @@ def app_scale():
                 print("Performing up scale...")
                 
                 # update replace var
-                update_obj_replace(row[2], row[3])
+                update_obj_replace(app_id)
                 
                 # create iterable container
                 create_iterable_service(app_id, (new_replicas - old_replicas))
@@ -461,7 +484,7 @@ def app_scale():
                 print("Performing down scale...")
                 
                 # update replace var
-                update_obj_replace(app, row[2])
+                update_obj_replace(app_id)
                 
                 # delete first container
                 delete_n_first_container(app_id, old_replicas - new_replicas)
@@ -615,13 +638,26 @@ def app_get_proc():
 def app_logs():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
-        # create full docker compose file
-        create_full_service(row_app[0][0])
+        app_id = row_app[0][0]
+        if get_arg(2)=='':
+            # create full docker compose file
+            create_full_service(app_id, yaml_logs)
+        else:
+            if get_arg(2)=='proxy':
+                # create proxy docker compose file
+                create_proxy_service(app_id, yaml_logs)
+            else:
+                ar_no = get_arg(2).split(":")
+                if len(ar_no)==1:
+                    ar_no.append(ar_no[0])
+                create_iterable_service(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
         
         # execute docker compose up
-        print("Please do not press CTRL + C to prevent containers stop, close the window instead.")
-        input()
-        docker_compose("docker-compose.yaml", "", True)
+        print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")
+        print("y / n?")
+        r = input()
+        if(r=='y'):
+            docker_compose(yaml_logs, "", True)
     else:
         info_app_not_found("get info")
         
@@ -729,6 +765,7 @@ yaml_proxy = "_proxy.yaml"
 yaml_non_itr = "_non_itr.yaml"
 yaml_itr = "_itr.yaml"
 yaml_full = "docker-compose.yaml"
+yaml_logs = "_logs.yaml"
 
 if not os.path.exists(tmpdir):
     os.mkdir(tmpdir)        
@@ -796,7 +833,9 @@ delete      To delete the application and all resources
 proc        To show running instance of backend service
 top         To show CPU and memory usage by all resources
 docker      To run any docker's related command (followed by docker related command's parameters)
-
+logs        To see log of the running process, option: proxy, [start_no]:[stop_no]
+            Example: amproxy logs proxy (to see proxy logs)
+                     amproxy logs 2:5 (to see log worker no 2 to 5)
 
 Available parameters:
 -d, --debug         Show command run by AMProxy internal process for debug purpose
