@@ -14,6 +14,8 @@ import signal
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
+version = "v1.0.6"
+
 def signal_handler(sig, frame):
     sys.exit(0)
 
@@ -547,7 +549,7 @@ def app_update():
         image = search_yaml_value(ctn_iterable1, "image")
         if image!="":
             # check and automatically download image
-            if docker_check_image_new(image):
+            if docker_check_image_new(image) or check_arg("-fo"):
                 # if image is new then proceed update
                 
                 # delete 25% first container
@@ -638,6 +640,7 @@ def app_get_top():
         print("\nSUMMARY")
         print("CPU %\tMEM %")
         print("" + str(total_cpu)[:5] + "%\t" + str(total_mem)[:5] + "%")
+        print("")
     else:
         info_app_not_found("get info")
         
@@ -664,6 +667,7 @@ def app_get_proc():
                     if ar[0]==app + "-" + str(row[1]):
                         print(i)
                         found = True
+        print("")
     else:
         info_app_not_found("get info")
         
@@ -728,6 +732,7 @@ for arg in args1:
     if arg=='--force-update': arg = '-fu'
     if arg=='--file': arg = '-f'
     if arg=='--version': arg = '-v'
+    if arg=='--force': arg = '-fo'
     args.append(arg)
 
 # known args
@@ -847,12 +852,13 @@ if len(args)>=2:
     elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
-        print("AMProxy v1.0.5")
+        print("AMProxy " + version)
         print("License: GNU General Public License v3")
         print("Author: Aris Munawar, S. T., M. Sc.")
-        print("Medium: https://medium.com/@areesmoon")
-        print("Github: https://github.com/areesmoon/")
-        print("Docker: https://hub.docker.com/u/areesmoon")
+        print("Repositories:")
+        print("- Medium: https://medium.com/@areesmoon")
+        print("- Github: https://github.com/areesmoon/")
+        print("- Docker: https://hub.docker.com/u/areesmoon")
     else: print(f'''
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
@@ -872,24 +878,26 @@ proc        To show running instance of backend service
 top         To show CPU and memory usage by all resources
 docker      To run any docker's related command (followed by docker related command's parameters)
 logs        To see log of the running process, option: proxy, worker, or [worker_no]:[worker_no]
-            Example: amproxy logs proxy (to see proxy logs)
-                     amproxy logs 2:5 (to see log worker no 2 to 5)
+            Example:
+            - amproxy logs proxy (to see proxy logs)
+            - amproxy logs 2:5 (to see log worker no 2 to 5)
 
 Available parameters:
 -d, --debug         Show command run by AMProxy internal process for debug purpose
--p, --port          Ports setting, consists of three ports, external_port:internal_port:statistic_port
-                    external_port: externally accessible port for your application service
-                    internal_port: internal / service container port (for http usually 80)
-                    statistic_por: externally accessible port for load balancer statistic
--r, --replicas      Number of backend server instances
--i, --interactive   Keep STDIN open even if not attached
--s, --start         To directly start application after created
 -f, --file [file]   Custom yaml file
+-fo, --force        Force update even if the image is not new (used with update)
+-i, --interactive   Keep STDIN open even if not attached
+-p, --port          Ports setting, consists of three ports, external_port:internal_port:statistic_port
+                    - external_port: externally accessible port for your application service
+                    - internal_port: internal / service container port (for http usually 80)
+                    - statistic_por: externally accessible port for load balancer statistic
+-r, --replicas      Number of backend server instances
+-s, --start         To directly start application after created
 -v, --version       Show current application version
 
 Upon started, your application is available at the following URL:
-Application service: http://localhost:external_port
-Load balancing statistic: http://localhost:statistic_port
+- Application service: http://localhost:external_port
+- Load balancing statistic: http://localhost:statistic_port
 ''')
 else:
     print("No argument supplied")
