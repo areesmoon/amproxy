@@ -1,0 +1,10 @@
+#!/bin/sh
+# Deployment need the following to be installed
+# Applicatioons:
+# - python3
+# - pip3
+# Pip libraries:
+# - pyyaml
+# - pyinstaller
+pyinstaller amproxy.py --onefile
+yes | cp dist/amproxy /usr/local/bin/

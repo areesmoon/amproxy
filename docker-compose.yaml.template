@@ -6,14 +6,8 @@ services:
 
 ### ITERABLE CONTAINER BLOCK ###
     ${app}-${no}:
-        image: areesmoon/submit-confbay
+        image: areesmoon/hello-world-php
         container_name: ${app}-${no}
         restart: always
-        env_file: my.env
         extra_hosts:
             - "host.docker.internal:host-gateway"
-        volumes:
-            - ./www/invoices:/var/www/invoices
-            - ./www/receipts:/var/www/receipts
-            - ./www/outgoing_mail_attachments:/var/www/outgoing_mail_attachments
-            - ./www/tmp_mail_attachments:/var/www/tmp_mail_attachments

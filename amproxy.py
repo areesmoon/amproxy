@@ -14,7 +14,7 @@ import signal
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
-version = "v1.0.6"
+version = "v1.0.10"
 
 def signal_handler(sig, frame):
     sys.exit(0)
@@ -23,6 +23,7 @@ def db_escape_field(field):
     return field.replace("'", "''")
 
 def db_execute(query):
+    if check_arg("-d"): print("Running query: " + query)
     conn = sqlite3.connect(file_db)
     cursor = conn.execute(query)
     rows = []
@@ -33,7 +34,9 @@ def db_execute(query):
     return rows
     
 def db_select(table, by, field):
-    rows = db_execute("select * from " + table + " where " + by + " = '" + str(field) + "'")
+    query = "select * from " + table + " where " + by + " = '" + str(field) + "'"
+    if check_arg("-d"): print("Running query: " + query)
+    rows = db_execute(query)
     if len(rows)>0:
         return rows[0]
     else:
@@ -175,7 +178,6 @@ def delete_n_first_container(app_id, n):
         print("Deleting app resource " + app + '-' + str(row[1]))
         resp = stop_delete_container(app + "-" + str(row[1]))
         if resp != "":
-            print("Success!")
             db_execute("DELETE FROM tb_ctn WHERE id = '" + str(row[0]) + "'")
         else:
             print("Failed!")
@@ -311,6 +313,44 @@ def info_app_not_found(command):
 To start an application, prepare the docker-compose.yaml.template file and run the following command:
 {app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_backend_server
 Example: create app hello-world -p 81:80:82 --replicas=10''')
+    
+def app_createdb(app):
+    if check_arg("-fo"): db_reset()
+    row_app = db_execute("select * from tb_app where name = '" + app + "'")
+    if len(row_app)==0:
+        ports = known_args["ports"]
+        if ports is None: ports = "80:80:8040"
+        
+        # load docker-compose.yaml.template or supplied file
+        image = get_arg_after("-i")
+        if image is not None:
+            tpl_dc = tpl_default
+            tpl_dc = tpl_dc.replace("${image}", image)
+        else:
+            file_dc = get_arg_after("-f")
+            file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
+            f = open(file_dc, 'r')
+            tpl_dc = f.read()
+        
+        # create app record
+        db_execute("insert into tb_app (name, ports, tpl_dc) values ('" \
+            + app + "', '" + ports + "', '" + db_escape_field(tpl_dc) + "')")
+        row = db_select("tb_app", "name", app)
+        app_id = row[0]
+        
+        # create worker container record
+        list_resp = run_docker_command("ps -a -f \"name=^" + app + "-([0-9]+$)\" --format {{.Names}}")
+        ar_no = []
+        for resp in list_resp:
+            ar_no.append(int(resp[len(app + "-"):]))
+        ar_no.sort()
+        for no in ar_no:
+            db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(no) + "')")
+        
+        print("Application database is successfully created!")
+    else:
+        print("There is already application named " + row_app[0][1] + " existed in this directory")
+        print("Run \"" + app_name + " start\" to start " + row_app[0][1] + " application now")
 
 def app_create(app):
     row_app = db_execute("select * from tb_app limit 0,1")
@@ -320,10 +360,16 @@ def app_create(app):
         replicas = int(known_args["replicas"])
         
         # load docker-compose.yaml.template or supplied file
-        file_dc = get_arg_after("-f")
-        file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
-        f = open(file_dc, 'r')
-        tpl_dc = f.read()
+        image = get_arg_after("-i")
+        if image is not None:
+            tpl_dc = tpl_default
+        else:
+            file_dc = get_arg_after("-f")
+            file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
+            f = open(file_dc, 'r')
+            tpl_dc = f.read()
+            
+        tpl_dc = tpl_dc.replace("${image}", image)
         
         # create app record
         db_execute("insert into tb_app (name, ports, tpl_dc) values ('" \
@@ -335,7 +381,7 @@ def app_create(app):
         update_obj_replace(app_id)
         
         # create service proxy
-        create_proxy_service()
+        create_proxy_service(app_id)
         
         # create service non iterable
         create_service_non_iterable(app_id)
@@ -382,9 +428,7 @@ def app_start(scale=False):
             for container in resp:
                 print("Starting app resource " + container)
                 resp = run_docker_command("start " + container)
-                if resp != "":
-                    print("Success!")
-                else:
+                if resp == "":
                     print("Failed!")
             print("Application " + row[0][1] + " has been started!\nTo stop app simply run \"" + app_name + " stop\"")
         else:
@@ -401,9 +445,7 @@ def app_stop():
             for container in resp:
                 print("Stopping app resource " + container)
                 resp = run_docker_command("stop " + container)
-                if resp != "":
-                    print("Success!")
-                else:
+                if resp == "":
                     print("Failed!")
             print("Application " + row[0][1] + " has been stopped!\nTo start app simply run \"" + app_name + " start\"\nTo delete app, run \"" + app_name + " delete\"")
         else:
@@ -420,6 +462,16 @@ def stop_delete_container(container):
                 if resp[0] != "":
                     return resp[0]
     return ""
+
+def db_reset():
+    db_execute("delete from tb_ctn")
+    db_execute("delete from sqlite_sequence where name='tb_ctn'")
+    db_execute("delete from tb_app")
+    db_execute("delete from sqlite_sequence where name='tb_app'")
+
+def app_reset():
+    db_reset()
+    print("Application database has been reset")
     
 def app_delete():
     row = db_execute("select * from tb_app limit 0,1")
@@ -430,23 +482,24 @@ def app_delete():
             for container in resp:
                 print("Deleting app resource " + container)
                 resp = stop_delete_container(container)
-                if resp != "":
-                    print("Success!")
-                else:
+                if resp == "":
                     print("Failed!")
         print("Deleting app network " + app + "-net")
         resp = run_docker_command("network rm " + app + "-net")
         if len(resp)>0:
-            if resp != "":
-                print("Success!")
-            else:
+            if resp == "":
                 print("Failed!")
         
         # delete record
         print("Deleting app data")
-        db_execute("delete from tb_ctn where app_id = '" + str(row[0][0]) + "'")
-        db_execute("delete from tb_app where id = '" + str(row[0][0]) + "'")
-        print("Success!")
+        
+        # JOIN DB MODE
+        # db_execute("delete from tb_ctn where app_id = '" + str(row[0][0]) + "'")
+        # db_execute("delete from tb_app where id = '" + str(row[0][0]) + "'")
+        
+        # LOCAL DB MODE
+        db_reset()
+        
         print("Application " + app + " has been deleted!")
     else:
         info_app_not_found("delete")
@@ -539,7 +592,7 @@ def app_update():
         num_del = math.floor(replicas*0.25)
         num_add = math.ceil(replicas*0.5)
         
-        print("Update strategy will be done half by half. Please wait until finish!")
+        print("Update strategy will be done half by: old 25% down, new 50% up, old 75% down, new 50% up")
         
         # get main container image
         dc = replace_variable(tpl_dc)
@@ -551,6 +604,9 @@ def app_update():
             # check and automatically download image
             if docker_check_image_new(image) or check_arg("-fo"):
                 # if image is new then proceed update
+                print("Continue update? (y / n)")
+                resp = input()
+                if resp!='y': sys.exit(0)
                 
                 # delete 25% first container
                 delete_n_first_container(app_id, num_del)
@@ -609,34 +665,29 @@ def app_get_top():
     if len(row_app)==1:
         app_id = row_app[0][0]
         app = row_app[0][1]
-        resp = run_docker_command("stats --no-stream --format \"table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}\t{{.MemUsage}}\"")
-        
+        list_resp = run_docker_command("stats --no-stream --format \"table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}\t{{.MemUsage}}\"")
         total_cpu = 0.00
         total_mem = 0.00
-        header = False
-        proxy = False
-        rows = db_execute("SELECT id, no FROM tb_ctn WHERE app_id = '" + str(app_id) + "' ORDER BY no")
-        for row in rows:
-            n=0
-            for i in resp:
-                n = n + 1
-                if n==1:
-                    if not header:
-                        print(i)
-                        header = True
+        list_resp_new =  []
+        for resp in list_resp:
+            ar = remove_double_space(resp).split(" ")
+            if ar[0]=="NAME":
+                list_resp_new.append([-1, resp])
+            elif re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
+                str_no = ar[0][len(app + "-"):]
+                if str_no=="proxy":
+                    list_resp_new.append([0, resp])
+                    total_cpu = total_cpu + float(ar[1].replace("%",""))
+                    total_mem = total_mem + float(ar[2].replace("%",""))
                 else:
-                    ar = remove_double_space(i).split(" ")
-                    if ar[0]==app + "-proxy":
-                        if not proxy:
-                            total_cpu = total_cpu + float(ar[1].replace("%",""))
-                            total_mem = total_mem + float(ar[2].replace("%",""))
-                            print(i)
-                            proxy = True
-                    elif ar[0]==app + "-" + str(row[1]):
-                        if re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
-                            total_cpu = total_cpu + float(ar[1].replace("%",""))
-                            total_mem = total_mem + float(ar[2].replace("%",""))
-                            print(i)
+                    list_resp_new.append([int(str_no), resp])
+                    total_cpu = total_cpu + float(ar[1].replace("%",""))
+                    total_mem = total_mem + float(ar[2].replace("%",""))
+        
+        list_resp_new.sort()
+        for resp in list_resp_new:
+            print(resp[1])
+        
         print("\nSUMMARY")
         print("CPU %\tMEM %")
         print("" + str(total_cpu)[:5] + "%\t" + str(total_mem)[:5] + "%")
@@ -647,26 +698,24 @@ def app_get_top():
 def app_get_proc():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
-        app_id = row_app[0][0]
         app = row_app[0][1]
-        resp = run_docker_command("ps -f \"name=" + app + "-([0-9]+$)\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
-        header = False
-        rows = db_execute("SELECT id, no FROM tb_ctn WHERE app_id = '" + str(app_id) + "' ORDER BY no")
-        for row in rows:
-            n = 0
-            found = False
-            for i in resp:
-                if found: break
-                n = n + 1
-                if n==1:
-                    if not header:
-                        print(i)
-                        header = True
+        list_resp = run_docker_command("ps -a -f \"name=" + app + "-([0-9]+$|proxy$)\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
+        list_resp_new =  []
+        for resp in list_resp:
+            ar = remove_double_space(resp).split(" ")
+            if ar[0]=="NAMES":
+                list_resp_new.append([-1, resp])
+            else:
+                str_no = ar[0][len(app + "-"):]
+                if str_no=="proxy":
+                    list_resp_new.append([0, resp])
                 else:
-                    ar = remove_double_space(i).split(" ")
-                    if ar[0]==app + "-" + str(row[1]):
-                        print(i)
-                        found = True
+                    list_resp_new.append([int(str_no), resp])
+        
+        list_resp_new.sort()
+        for resp in list_resp_new:
+            print(resp[1])
+        
         print("")
     else:
         info_app_not_found("get info")
@@ -679,24 +728,25 @@ def app_logs():
             # create full docker compose file
             create_service_full(app_id, yaml_logs)
         else:
-            if get_arg(2)=='proxy':
+            if get_arg(2)=='--proxy':
                 # create proxy docker compose file
                 create_proxy_service(app_id, yaml_logs)
             else:
-                if get_arg(2)=='worker':
-                    tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
-                    ar_no = []
-                    ar_no.append(tmp_row[0][0])
-                    ar_no.append(tmp_row[0][1])
-                else:
-                    ar_no = get_arg(2).split(":")
-                    if len(ar_no)==1:
-                        ar_no.append(ar_no[0])
+                if get_arg(2)=='--worker':
+                    if get_arg(3)=='':
+                        tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
+                        ar_no = []
+                        ar_no.append(tmp_row[0][0])
+                        ar_no.append(tmp_row[0][1])
+                    else:
+                        ar_no = get_arg(3).split(":")
+                        if len(ar_no)==1:
+                            ar_no.append(ar_no[0])
                 create_service_iterable(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
         
         # execute docker compose up
         print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")
-        print("y / n?")
+        print("Continue? (y / n)")
         r = input()
         if(r=='y'):
             docker_compose(yaml_logs, "", True)
@@ -793,6 +843,19 @@ frontend ${app}-frontend
 backend ${app}-backend
 '''
 
+tpl_default = '''
+---
+services:
+### NON ITERABLE CONTAINER BLOCK ###
+### ITERABLE CONTAINER BLOCK ###
+    ${app}-${no}:
+        image: ${image}
+        container_name: ${app}-${no}
+        restart: always
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+'''
+
 tpl_container_network = get_indent(2) + "networks:\n" + get_indent(3) + "- ${app}-net"
 tpl_backend_server = "server s${no} ${app}-${no}:${container_port} check"
 
@@ -810,43 +873,48 @@ yaml_itr = "_itr.yaml"
 yaml_full = "docker-compose.yaml"
 yaml_logs = "_logs.yaml"
 
-if not os.path.exists(tmpdir):
-    os.mkdir(tmpdir)        
-if not os.path.exists(dir_cfg):
-    os.mkdir(dir_cfg)
-if not os.path.exists(dir_db):
-    os.mkdir(dir_db)
+if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
+    if not os.path.exists(tmpdir):
+        os.mkdir(tmpdir)        
+    if not os.path.exists(dir_cfg):
+        os.mkdir(dir_cfg)
+    if not os.path.exists(dir_db):
+        os.mkdir(dir_db)
 
 # prepare database
-if not os.path.exists(file_db):
-    conn = sqlite3.connect(file_db)
-    conn.execute('''CREATE TABLE tb_app
-                (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name            CHAR(255),
-                    ports           CHAR(50),
-                    tpl_dc          TEXT
-                );''')
-    conn.execute("CREATE INDEX app_idx_name ON tb_app (name);")
-    conn.execute('''CREATE TABLE tb_ctn
-                (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    app_id  INT,
-                    no      INT
-                );''')
-    conn.execute("CREATE INDEX container_idx_app_id ON tb_ctn (app_id);")
-    conn.execute("CREATE INDEX container_idx_app_id_no ON tb_ctn (app_id, no);")
-    conn.close()
+
+if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
+    if not os.path.exists(file_db):
+        conn = sqlite3.connect(file_db)
+        conn.execute('''CREATE TABLE tb_app
+                    (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name            CHAR(255),
+                        ports           CHAR(50),
+                        tpl_dc          TEXT
+                    );''')
+        conn.execute("CREATE INDEX app_idx_name ON tb_app (name);")
+        conn.execute('''CREATE TABLE tb_ctn
+                    (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        app_id  INT,
+                        no      INT
+                    );''')
+        conn.execute("CREATE INDEX container_idx_app_id ON tb_ctn (app_id);")
+        conn.execute("CREATE INDEX container_idx_app_id_no ON tb_ctn (app_id, no);")
+        conn.close()
 
 obj_replace = {}
 
 if len(args)>=2:
     if args[1]=="create": app_create(args[2])
+    elif args[1]=="createdb": app_createdb(args[2])
     elif args[1]=="start": app_start()
     elif args[1]=="stop": app_stop()
     elif args[1]=="delete": app_delete()
     elif args[1]=="scale": app_scale()        
     elif args[1]=="update": app_update()
+    elif args[1]=="reset": app_reset()
     elif args[1]=="proc": app_get_proc()
     elif args[1]=="top": app_get_top()
     elif args[1]=="logs": app_logs()
@@ -868,25 +936,34 @@ To start an application, edit the existing docker-compose.yaml.template template
 Example: {app_name} create app hello-world -p 81:80:82 --replicas=10
 
 Available commands:
-create      To create the application, see the above example
-start       To start the already created application
-stop        To stop currently running application
-scale       To scale up / down the running application, example: {app_name} scale hello-world --replicas=20
-update      To update container with the newest image, done half by half
+create      Create the application, see the above example
+            - options: --image, --replicas --port
+createdb    Create application database from a running application
+            - options: --image, --port
+start       Start the already created application
+stop        Stop currently running application
+scale       Scale up / down the running application
+            - options: -r / --replicas
+            Example:
+            - {app_name} scale hello-world --replicas=20
+update      Update container with the newest image, done half by half
+            - options: -fo / --force
 delete      To delete the application and all resources
+reset       Reset application database (containers must be deleted manually)
 proc        To show running instance of backend service
 top         To show CPU and memory usage by all resources
 docker      To run any docker's related command (followed by docker related command's parameters)
-logs        To see log of the running process, option: proxy, worker, or [worker_no]:[worker_no]
+logs        To see log of the running process
+            - options: --proxy, --worker [worker_no]:[worker_no]
             Example:
-            - amproxy logs proxy (to see proxy logs)
-            - amproxy logs 2:5 (to see log worker no 2 to 5)
+            - {app_name} logs --proxy (to see proxy logs)
+            - {app_name} logs --worker 2:5 (to see log worker no 2 to 5)
 
 Available parameters:
 -d, --debug         Show command run by AMProxy internal process for debug purpose
--f, --file [file]   Custom yaml file
+-f, --file [file]   Specify custom yaml file
 -fo, --force        Force update even if the image is not new (used with update)
--i, --interactive   Keep STDIN open even if not attached
+-i, --image         Container's docker image (direct app creation without docker-compose.yaml.template)
 -p, --port          Ports setting, consists of three ports, external_port:internal_port:statistic_port
                     - external_port: externally accessible port for your application service
                     - internal_port: internal / service container port (for http usually 80)
