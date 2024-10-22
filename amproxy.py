@@ -14,7 +14,7 @@ import signal
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
-version = "v1.0.10"
+version = "v1.0.11"
 
 def signal_handler(sig, frame):
     sys.exit(0)
@@ -183,6 +183,7 @@ def delete_n_first_container(app_id, n):
             print("Failed!")
 
 def update_haproxy_cfg(app_id):
+    update_obj_replace(app_id)
     cfg = clean_yaml(tpl_cfg)
     rows = db_execute("SELECT no from tb_ctn where app_id = '" + str(app_id) + "'")
     if len(rows) > 0:
@@ -346,6 +347,9 @@ def app_createdb(app):
         ar_no.sort()
         for no in ar_no:
             db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(no) + "')")
+        
+        # recreate cfg
+        update_haproxy_cfg(app_id)
         
         print("Application database is successfully created!")
     else:
@@ -660,7 +664,7 @@ def remove_double_space(txt):
         x = re.search("  ", txt)
     return txt
 
-def app_get_top():
+def app_top():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
         app_id = row_app[0][0]
@@ -695,7 +699,7 @@ def app_get_top():
     else:
         info_app_not_found("get info")
         
-def app_get_proc():
+def app_proc():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
         app = row_app[0][1]
@@ -724,25 +728,23 @@ def app_logs():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
         app_id = row_app[0][0]
-        if get_arg(2)=='':
+        if get_arg(2)=='--proxy':
+            # create proxy docker compose file
+            create_proxy_service(app_id, yaml_logs)
+        elif get_arg(2)=='--worker':
+            if get_arg(3)=='':
+                tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
+                ar_no = []
+                ar_no.append(tmp_row[0][0])
+                ar_no.append(tmp_row[0][1])
+            else:
+                ar_no = get_arg(3).split(":")
+                if len(ar_no)==1:
+                    ar_no.append(ar_no[0])
+            create_service_iterable(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
+        else:
             # create full docker compose file
             create_service_full(app_id, yaml_logs)
-        else:
-            if get_arg(2)=='--proxy':
-                # create proxy docker compose file
-                create_proxy_service(app_id, yaml_logs)
-            else:
-                if get_arg(2)=='--worker':
-                    if get_arg(3)=='':
-                        tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
-                        ar_no = []
-                        ar_no.append(tmp_row[0][0])
-                        ar_no.append(tmp_row[0][1])
-                    else:
-                        ar_no = get_arg(3).split(":")
-                        if len(ar_no)==1:
-                            ar_no.append(ar_no[0])
-                create_service_iterable(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
         
         # execute docker compose up
         print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")
@@ -915,8 +917,8 @@ if len(args)>=2:
     elif args[1]=="scale": app_scale()        
     elif args[1]=="update": app_update()
     elif args[1]=="reset": app_reset()
-    elif args[1]=="proc": app_get_proc()
-    elif args[1]=="top": app_get_top()
+    elif args[1]=="proc": app_proc()
+    elif args[1]=="top": app_top()
     elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
