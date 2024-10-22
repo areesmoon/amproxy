@@ -14,8 +14,6 @@ import signal
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
-version = "v1.0.11"
-
 def signal_handler(sig, frame):
     sys.exit(0)
 
@@ -367,13 +365,12 @@ def app_create(app):
         image = get_arg_after("-i")
         if image is not None:
             tpl_dc = tpl_default
+            tpl_dc = tpl_dc.replace("${image}", image)
         else:
             file_dc = get_arg_after("-f")
             file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
             f = open(file_dc, 'r')
             tpl_dc = f.read()
-            
-        tpl_dc = tpl_dc.replace("${image}", image)
         
         # create app record
         db_execute("insert into tb_app (name, ports, tpl_dc) values ('" \
@@ -908,6 +905,9 @@ if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
 
 obj_replace = {}
 
+version = "v1.0.12"
+version_comment = "Fix error on create app"
+
 if len(args)>=2:
     if args[1]=="create": app_create(args[2])
     elif args[1]=="createdb": app_createdb(args[2])
@@ -923,6 +923,7 @@ if len(args)>=2:
     elif args[1]=="docker": app_docker()
     elif args[1]=="-v":
         print("AMProxy " + version)
+        print("Version Comment: " + version_comment)
         print("License: GNU General Public License v3")
         print("Author: Aris Munawar, S. T., M. Sc.")
         print("Repositories:")
