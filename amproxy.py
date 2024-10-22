@@ -407,6 +407,16 @@ def app_create(app):
         ## non iterable service
         if ctn_non_iterable != '':
             docker_compose(yaml_non_itr, "--no-start")
+            
+        # get main container image
+        dc = replace_variable(tpl_dc)
+        ar_dc = dc.split("### ITERABLE CONTAINER BLOCK ###")
+        ctn_iterable1 = ar_dc[1].replace("${no}", str(1))
+        
+        image = search_yaml_value(ctn_iterable1, "image")
+        if image!="":
+            # pull newer image, if exists
+            docker_pull(image)
         
         ## iterable container service
         if(check_arg('-s')):
@@ -566,7 +576,11 @@ def search_yaml_value(string_yaml, search_key):
                 return dct[key][key1]
     return ""
 
+def docker_pull(repo):
+    subprocess.call(["docker", "pull", repo])
+
 def docker_check_image_new(repo):
+    docker_pull(repo)
     resp = run_docker_command("pull " + repo)
     # print(resp)
     for line in resp:
@@ -905,8 +919,8 @@ if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
 
 obj_replace = {}
 
-version = "v1.0.12"
-version_comment = "Fix error on create app"
+version = "v1.0.13"
+version_comment = "Get new image on create"
 
 if len(args)>=2:
     if args[1]=="create": app_create(args[2])
