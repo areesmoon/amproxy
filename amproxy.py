@@ -409,14 +409,16 @@ def app_create(app):
             docker_compose(yaml_non_itr, "--no-start")
             
         # get main container image
-        dc = replace_variable(tpl_dc)
-        ar_dc = dc.split("### ITERABLE CONTAINER BLOCK ###")
-        ctn_iterable1 = ar_dc[1].replace("${no}", str(1))
+        tpl_ctn = get_iterable_container_tpl(tpl_dc).replace("${no}", str(1))
         
-        image = search_yaml_value(ctn_iterable1, "image")
+        image = search_yaml_value(tpl_ctn, "image")
         if image!="":
             # pull newer image, if exists
+            old_digest = docker_get_digest(image)
             docker_pull(image)
+            new_digest = docker_get_digest(image)
+            if new_digest != old_digest:
+                print("Application will be using new image")
         
         ## iterable container service
         if(check_arg('-s')):
@@ -576,6 +578,15 @@ def search_yaml_value(string_yaml, search_key):
                 return dct[key][key1]
     return ""
 
+def docker_get_digest(repo):
+    resp = run_docker_command("inspect " + repo + " | " + ("findstr" if os.name=="nt" else "grep")  + " -i " + repo + "@sha256")
+    if len(resp)>0:
+        str_resp = resp[0].replace(" ","")
+        if str_resp != "":
+            ar_resp = str_resp.split(":")
+            return ar_resp[1]
+    return ""
+
 def docker_pull(repo):
     subprocess.call(["docker", "pull", repo])
 
@@ -616,8 +627,13 @@ def app_update():
         
         image = search_yaml_value(ctn_iterable1, "image")
         if image!="":
+            
             # check and automatically download image
-            if docker_check_image_new(image) or check_arg("-fo"):
+            old_digest = docker_get_digest(image)
+            docker_pull(image)
+            new_digest = docker_get_digest(image)
+            
+            if new_digest != old_digest or check_arg("-fo"):
                 # if image is new then proceed update
                 print("Continue update? (y / n)")
                 resp = input()
@@ -919,9 +935,6 @@ if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
 
 obj_replace = {}
 
-version = "v1.0.13"
-version_comment = "Get new image on create"
-
 if len(args)>=2:
     if args[1]=="create": app_create(args[2])
     elif args[1]=="createdb": app_createdb(args[2])
@@ -935,7 +948,13 @@ if len(args)>=2:
     elif args[1]=="top": app_top()
     elif args[1]=="logs": app_logs()
     elif args[1]=="docker": app_docker()
+    elif args[1]=="test":
+        digest = docker_get_digest("areesmoon/submit-confbay")
+        print(digest)
     elif args[1]=="-v":
+        version = "v1.0.14"
+        version_comment = "Get image digest & compare on update and create"
+
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
         print("License: GNU General Public License v3")
