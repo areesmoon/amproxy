@@ -583,7 +583,7 @@ def docker_get_digest(repo):
         str_resp = resp[0].replace(" ","")
         if str_resp != "":
             ar_resp = str_resp.split(":")
-            return ar_resp[1]
+            return ar_resp[1].rstrip(",")
     return ""
 
 def docker_pull(repo):
@@ -968,8 +968,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.15"
-        version_comment = "Exec inside proxy  / worker conntainer"
+        version = "v1.0.16"
+        version_comment = "Fix digest output"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
@@ -996,7 +996,7 @@ digest      Get SHA256 digest from a docker repo
             Example:
             - {app_name} digest php:alpine
 exec        Run command inside worker container or proxy container
-            - option: proxy, [worker_no]
+            - option: proxy, worker_no
             Example:
             - {app_name} exec 5 bash (this will run bash inside container app-name-5)
 start       Start the already created application
