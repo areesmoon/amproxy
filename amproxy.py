@@ -82,17 +82,21 @@ def list2json(list):
 def split_command_args(command):
     return command.split(" ")
 
-def run_command(command):
+def run_command(command, attach = False):
     if check_arg("-d"): print("Running command: {}".format(command))
-    p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
-    list_resp = p.stdout.readlines()
-    new_list_resp = []
-    for line in list_resp:
-        new_list_resp.append(line.rstrip())
-    return new_list_resp
+    if attach:
+        params = command.split(" ")
+        subprocess.call(params)
+    else:
+        p = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        list_resp = p.stdout.readlines()
+        new_list_resp = []
+        for line in list_resp:
+            new_list_resp.append(line.rstrip())
+        return new_list_resp
 
-def run_docker_command(command):
-    return run_command("docker " + command)
+def run_docker_command(command, attach = False):
+    return run_command("docker " + command, attach)
 
 def print_json(obj):
     print(json.dumps(obj, indent=4))
@@ -106,14 +110,9 @@ def clean_yaml(text):
                 new_text = new_text + "\n" + line
     return new_text
 
-def docker_compose(file, option="", attach_process=False):
-    if(attach_process):
-        if option!="":
-            subprocess.call(["docker", "compose", "-f", file,  "up", option])
-        else:
-            subprocess.call(["docker", "compose", "-f", file,  "up"])
-    else:
-        return run_docker_command("compose -f " + file + " up " + (" " + option if option != "" else option))
+def docker_compose(file, option="", attach=False):
+    command = "compose -f " + file + " up" + (" " + option if option != "" else "")
+    run_docker_command(command, attach)
     
 def network_create(app):
     resp = run_docker_command("network create --driver=bridge " + get_app_prefix(app) + 'net')
@@ -751,6 +750,22 @@ def app_proc():
     else:
         info_app_not_found("get info")
         
+def app_exec():
+    row_app = db_execute("select * from tb_app limit 0,1")
+    if len(row_app)==1:
+        app = row_app[0][1]
+        if get_arg(2)!="":
+            params = ["docker", "exec", "-it", app + "-" + get_arg(2)]
+            i = -1
+            for arg in args:
+                i = i + 1
+                if i > 2:
+                    params.append(arg)
+            if check_arg("-d"): print("Running: " + str(params))
+            subprocess.call(params)
+    else:
+        info_app_not_found("bash")
+        
 def app_logs():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
@@ -783,15 +798,14 @@ def app_logs():
         info_app_not_found("get info")
         
 def app_docker():
-    if(args[2]=='stats'): args.append("--no-stream")
-    temp_args = args
-    temp_args.pop(0)
-    temp_args.pop(0)
-    command = " ".join(temp_args)
-    resp = run_docker_command(command)
-    for i in resp:
-        print(i)
-
+    params = ["docker"]
+    i = -1
+    for arg in args:
+        i = i + 1
+        if i > 1:
+            params.append(arg)
+    if check_arg("-d"): print("Running: " + str(params))
+    subprocess.call(params)
 
 # capture CTRL + C
 signal.signal(signal.SIGINT, signal_handler)
@@ -947,13 +961,15 @@ if len(args)>=2:
     elif args[1]=="proc": app_proc()
     elif args[1]=="top": app_top()
     elif args[1]=="logs": app_logs()
+    elif args[1]=="exec": app_exec()
     elif args[1]=="docker": app_docker()
-    elif args[1]=="test":
-        digest = docker_get_digest("areesmoon/submit-confbay")
-        print(digest)
+    elif args[1]=="digest":
+        if get_arg(2)!="":
+            digest = docker_get_digest(get_arg(2))
+            print(digest)
     elif args[1]=="-v":
-        version = "v1.0.14"
-        version_comment = "Get image digest & compare on update and create"
+        version = "v1.0.15"
+        version_comment = "Exec inside proxy  / worker conntainer"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
@@ -976,6 +992,13 @@ create      Create the application, see the above example
             - options: --image, --replicas --port
 createdb    Create application database from a running application
             - options: --image, --port
+digest      Get SHA256 digest from a docker repo
+            Example:
+            - {app_name} digest php:alpine
+exec        Run command inside worker container or proxy container
+            - option: proxy, [worker_no]
+            Example:
+            - {app_name} exec 5 bash (this will run bash inside container app-name-5)
 start       Start the already created application
 stop        Stop currently running application
 scale       Scale up / down the running application
