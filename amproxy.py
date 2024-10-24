@@ -610,15 +610,6 @@ def app_update():
         app = row_app[0][1]
         tpl_dc = row_app[0][3]
         
-        print("Updating application " + app)
-        replicas = db_execute("select count(*) as num from tb_ctn where app_id = '" + str(app_id) + "'")[0][0]
-        
-        # get 25% to down and 50% to add
-        num_del = math.floor(replicas*0.25)
-        num_add = math.ceil(replicas*0.5)
-        
-        print("Update strategy will be done half by: old 25% down, new 50% up, old 75% down, new 50% up")
-        
         # get main container image
         dc = replace_variable(tpl_dc)
         ar_dc = dc.split("### ITERABLE CONTAINER BLOCK ###")
@@ -633,47 +624,82 @@ def app_update():
             new_digest = docker_get_digest(image)
             
             if new_digest != old_digest or check_arg("-fo"):
-                # if image is new then proceed update
-                print("Continue update? (y / n)")
-                resp = input()
-                if resp!='y': sys.exit(0)
+                print("Updating application " + app)
+                if(get_arg_after("-st")=='1b1'):
+                    print("Update strategy will be done one by one: new 1 up, old 1 down, etc until all container updated")
+                    
+                    print("Continue update? (y / n)")
+                    resp = input()
+                    if resp!='y': sys.exit(0)
+                    
+                    rows = db_execute("SELECT id, no from tb_ctn where app_id = '" + str(app_id) + "' LIMIT 0," + str(n))
+                    
+                    for row in rows:
+                        # delete 1 first container
+                        delete_n_first_container(app_id, 1)
+                        
+                        # create 1 new container
+                        create_service_iterable(app_id, 1)
+                        
+                        # deploy new container
+                        docker_compose(yaml_itr, "--no-start", True)
+                        
+                        # wait until finish and start app
+                        app_start(True)
+                        
+                        #refresh service
+                        refresh_service(app_id)
+                    
+                else:
+                    print("Update strategy will be done half by half: old 25% down, new 50% up, old 75% down, new 50% up")
+                    
+                    replicas = db_execute("select count(*) as num from tb_ctn where app_id = '" + str(app_id) + "'")[0][0]
+                    
+                    # get 25% to down and 50% to add
+                    num_del = math.floor(replicas*0.25)
+                    num_add = math.ceil(replicas*0.5)
                 
-                # delete 25% first container
-                delete_n_first_container(app_id, num_del)
-                
-                #refresh service
-                refresh_service(app_id)
-                
-                # create 50% new container
-                create_service_iterable(app_id, num_add)
-                
-                # deploy container & update config
-                docker_compose(yaml_itr, "--no-start", True)
-                
-                # wait until finish and start app
-                app_start(True)
-                
-                #refresh service
-                refresh_service(app_id)
-                
-                # once the routine is entering here, it means already running
-                # so, delete the first 8 and replace with 5 new
-                delete_n_first_container(app_id, replicas-num_del)
-                
-                #refresh service
-                refresh_service(app_id)
-                
-                # add 50% rest iterable service
-                create_service_iterable(app_id, replicas-num_add)
-                
-                # deploy container & update config
-                docker_compose(yaml_itr, "--no-start", True)
-                
-                # wait until finish and start app
-                app_start(True)
-                
-                #refresh service
-                refresh_service(app_id)
+                    # if image is new then proceed update
+                    print("Continue update? (y / n)")
+                    resp = input()
+                    if resp!='y': sys.exit(0)
+                    
+                    # delete 25% first container
+                    delete_n_first_container(app_id, num_del)
+                    
+                    #refresh service
+                    refresh_service(app_id)
+                    
+                    # create 50% new container
+                    create_service_iterable(app_id, num_add)
+                    
+                    # deploy container & update config
+                    docker_compose(yaml_itr, "--no-start", True)
+                    
+                    # wait until finish and start app
+                    app_start(True)
+                    
+                    #refresh service
+                    refresh_service(app_id)
+                    
+                    # once the routine is entering here, it means already running
+                    # so, delete the first 8 and replace with 5 new
+                    delete_n_first_container(app_id, replicas-num_del)
+                    
+                    #refresh service
+                    refresh_service(app_id)
+                    
+                    # add 50% rest iterable service
+                    create_service_iterable(app_id, replicas-num_add)
+                    
+                    # deploy container & update config
+                    docker_compose(yaml_itr, "--no-start", True)
+                    
+                    # wait until finish and start app
+                    app_start(True)
+                    
+                    #refresh service
+                    refresh_service(app_id)
                 
             else:
                 print("Image is already up to date. Skipped")
@@ -822,6 +848,7 @@ for arg in args1:
     if arg=='--replicas': arg = '-r'
     if arg=='--interactive': arg = '-i'
     if arg=='--start': arg = '-s'
+    if arg=='--strategy': arg = '-st'
     if arg=='--force-update': arg = '-fu'
     if arg=='--file': arg = '-f'
     if arg=='--version': arg = '-v'
@@ -968,8 +995,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.16"
-        version_comment = "Fix digest output"
+        version = "v1.0.17"
+        version_comment = "Optional 1 by 1 update strategy"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
@@ -1029,6 +1056,9 @@ Available parameters:
                     - statistic_por: externally accessible port for load balancer statistic
 -r, --replicas      Number of backend server instances
 -s, --start         To directly start application after created
+-st, --strategy     Update strategy:
+                    - hbh: half by half (default, container will be replace 50% by 50%)
+                    - 1b1: one by one (container will be updated 1 by 1)
 -v, --version       Show current application version
 
 Upon started, your application is available at the following URL:
