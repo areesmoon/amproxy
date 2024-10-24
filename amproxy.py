@@ -632,7 +632,7 @@ def app_update():
                     resp = input()
                     if resp!='y': sys.exit(0)
                     
-                    rows = db_execute("SELECT id, no from tb_ctn where app_id = '" + str(app_id) + "' LIMIT 0," + str(n))
+                    rows = db_execute("SELECT id, no from tb_ctn where app_id = '" + str(app_id) + "' ORDER by no")
                     
                     for row in rows:
                         # delete 1 first container
@@ -700,6 +700,8 @@ def app_update():
                     
                     #refresh service
                     refresh_service(app_id)
+                    
+                print("Updating app " + app + " completed!")
                 
             else:
                 print("Image is already up to date. Skipped")
