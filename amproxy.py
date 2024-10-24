@@ -429,7 +429,7 @@ def app_create(app):
     else:
         print("There is already application named " + row_app[0][1] + " existed in this directory")
         print("Run \"" + app_name + " start\" to start " + row_app[0][1] + " application now")
-    
+
 def app_start(scale=False):
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
@@ -442,7 +442,7 @@ def app_start(scale=False):
                 resp = run_docker_command("start " + container)
                 if resp == "":
                     print("Failed!")
-            print("Application " + row[0][1] + " has been started!\nTo stop app simply run \"" + app_name + " stop\"")
+            if not scale: print("Application " + row[0][1] + " has been started!\nTo stop app simply run \"" + app_name + " stop\"")
         else:
             print("Application's resources not found, you may have deleted them manually. Run \"" + app_name + " delete\" to fully delete your application")
     else:
