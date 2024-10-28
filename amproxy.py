@@ -336,6 +336,12 @@ def app_createdb(app):
         row = db_select("tb_app", "name", app)
         app_id = row[0]
         
+        # create proxy yaml
+        create_proxy_service(app_id)
+        
+        # create non iterable yaml
+        create_service_non_iterable(app_id)
+        
         # create worker container record
         list_resp = run_docker_command("ps -a -f \"name=^" + app + "-([0-9]+$)\" --format {{.Names}}")
         ar_no = []
@@ -344,6 +350,9 @@ def app_createdb(app):
         ar_no.sort()
         for no in ar_no:
             db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(no) + "')")
+            
+        # create iterable yaml
+        create_service_iterable(app_id, None, None, min(ar_no), max(ar_no))
         
         # recreate cfg
         update_haproxy_cfg(app_id)
@@ -997,8 +1006,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.17"
-        version_comment = "Optional 1 by 1 update strategy"
+        version = "v1.0.18"
+        version_comment = "createdb recreate all yaml files"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
