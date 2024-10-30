@@ -410,11 +410,11 @@ def app_create(app):
         
         # docker compose all
         ## proxy service
-        docker_compose(yaml_proxy, "--no-start")
+        docker_compose(yaml_proxy, "-d", True)
         
         ## non iterable service
         if ctn_non_iterable != '':
-            docker_compose(yaml_non_itr, "--no-start")
+            docker_compose(yaml_non_itr, "-d", True)
             
         # get main container image
         tpl_ctn = get_iterable_container_tpl(tpl_dc).replace("${no}", str(1))
@@ -429,22 +429,17 @@ def app_create(app):
                 print("Application will be using new image")
         
         ## iterable container service
-        if(check_arg('-s')):
-            # directly start
-            docker_compose(yaml_itr, "", True)
-        else:
-            docker_compose(yaml_itr, "--no-start", True)
-            print("Application successfully deployed!\nRun \"" + app_name + " start\" to start your application now")
+        docker_compose(yaml_itr, "-d", True)
+        print("Application successfully deployed!")
     else:
         print("There is already application named " + row_app[0][1] + " existed in this directory")
-        print("Run \"" + app_name + " start\" to start " + row_app[0][1] + " application now")
 
 def app_start(scale=False):
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         print("Starting application " + row[0][1])
         f_status = " -f \"status=created\"" if scale else ""
-        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-([0-9]+$|proxy$)\" --format {{.Names}}" + f_status)
+        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-*\" --format {{.Names}}" + f_status)
         if(len(resp)>0):
             for container in resp:
                 print("Starting app resource " + container)
@@ -461,7 +456,7 @@ def app_stop():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         print("Stopping application " + row[0][1])
-        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-([0-9]+$|proxy$)\" --format {{.Names}}")
+        resp = run_docker_command("ps -a -f \"name=^" + row[0][1] + "-*\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
                 print("Stopping app resource " + container)
@@ -498,7 +493,7 @@ def app_delete():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         app = row[0][1]
-        resp = run_docker_command("ps -a -f \"name=^" + app + "-([0-9]+$|proxy$)\" --format {{.Names}}")
+        resp = run_docker_command("ps -a -f \"name=^" + app + "-*\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
                 print("Deleting app resource " + container)
@@ -547,9 +542,7 @@ def app_scale():
                 create_service_iterable(app_id, (new_replicas - old_replicas))
                 
                 # compose new container
-                docker_compose(yaml_itr, "--no-start", True)
-                
-                app_start(True)
+                docker_compose(yaml_itr, "-d", True)
                 
                 #refresh service
                 refresh_service(app_id)
@@ -651,10 +644,7 @@ def app_update():
                         create_service_iterable(app_id, 1)
                         
                         # deploy new container
-                        docker_compose(yaml_itr, "--no-start", True)
-                        
-                        # wait until finish and start app
-                        app_start(True)
+                        docker_compose(yaml_itr, "-d", True)
                         
                         #refresh service
                         refresh_service(app_id)
@@ -683,10 +673,7 @@ def app_update():
                     create_service_iterable(app_id, num_add)
                     
                     # deploy container & update config
-                    docker_compose(yaml_itr, "--no-start", True)
-                    
-                    # wait until finish and start app
-                    app_start(True)
+                    docker_compose(yaml_itr, "-d", True)
                     
                     #refresh service
                     refresh_service(app_id)
@@ -702,10 +689,7 @@ def app_update():
                     create_service_iterable(app_id, replicas-num_add)
                     
                     # deploy container & update config
-                    docker_compose(yaml_itr, "--no-start", True)
-                    
-                    # wait until finish and start app
-                    app_start(True)
+                    docker_compose(yaml_itr, "-d", True)
                     
                     #refresh service
                     refresh_service(app_id)
@@ -740,7 +724,7 @@ def app_top():
             ar = remove_double_space(resp).split(" ")
             if ar[0]=="NAME":
                 list_resp_new.append([-1, resp])
-            elif re.search("^" + app + "-([0-9]+$|proxy$)", ar[0]):
+            elif re.search("^" + app + "-*", ar[0]):
                 str_no = ar[0][len(app + "-"):]
                 if str_no=="proxy":
                     list_resp_new.append([0, resp])
@@ -766,7 +750,7 @@ def app_proc():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
         app = row_app[0][1]
-        list_resp = run_docker_command("ps -a -f \"name=" + app + "-([0-9]+$|proxy$)\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
+        list_resp = run_docker_command("ps -a -f \"name=" + app + "-*\" --format \"table {{.Names}}\\t{{.Ports}}\\t{{.Status}}\\t{{.RunningFor}}\"")
         list_resp_new =  []
         for resp in list_resp:
             ar = remove_double_space(resp).split(" ")
@@ -1006,8 +990,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.18"
-        version_comment = "createdb recreate all yaml files"
+        version = "v1.0.19"
+        version_comment = "create directly start"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
