@@ -726,12 +726,12 @@ def app_top():
                 list_resp_new.append([-1, resp])
             elif re.search("^" + app + "-*", ar[0]):
                 str_no = ar[0][len(app + "-"):]
-                if str_no=="proxy":
-                    list_resp_new.append([0, resp])
+                if str_no.isnumeric():
+                    list_resp_new.append([int(str_no), resp])
                     total_cpu = total_cpu + float(ar[1].replace("%",""))
                     total_mem = total_mem + float(ar[2].replace("%",""))
                 else:
-                    list_resp_new.append([int(str_no), resp])
+                    list_resp_new.append([0, resp])
                     total_cpu = total_cpu + float(ar[1].replace("%",""))
                     total_mem = total_mem + float(ar[2].replace("%",""))
         
@@ -758,10 +758,10 @@ def app_proc():
                 list_resp_new.append([-1, resp])
             else:
                 str_no = ar[0][len(app + "-"):]
-                if str_no=="proxy":
-                    list_resp_new.append([0, resp])
-                else:
+                if str_no.isnumeric():
                     list_resp_new.append([int(str_no), resp])
+                else:
+                    list_resp_new.append([0, resp])
         
         list_resp_new.sort()
         for resp in list_resp_new:
