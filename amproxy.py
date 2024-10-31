@@ -473,7 +473,7 @@ def stop_delete_container(container):
     resp = run_docker_command("stop " + container)
     if len(resp)>0:
         if resp[0] != "":
-            resp = run_docker_command("rm " + container)
+            resp = run_docker_command("rm --volumes " + container)
             if len(resp)>0:
                 if resp[0] != "":
                     return resp[0]
@@ -990,8 +990,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.20"
-        version_comment = "Fix createdb tb_ctn double insert"
+        version = "v1.0.21"
+        version_comment = "Remove container and its associated volume"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
