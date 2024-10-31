@@ -348,8 +348,8 @@ def app_createdb(app):
         for resp in list_resp:
             ar_no.append(int(resp[len(app + "-"):]))
         ar_no.sort()
-        for no in ar_no:
-            db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(no) + "')")
+        # for no in ar_no:
+        #    db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(no) + "')")
             
         # create iterable yaml
         create_service_iterable(app_id, None, None, min(ar_no), max(ar_no))
@@ -990,8 +990,8 @@ if len(args)>=2:
             digest = docker_get_digest(get_arg(2))
             print(digest)
     elif args[1]=="-v":
-        version = "v1.0.19"
-        version_comment = "create directly start"
+        version = "v1.0.20"
+        version_comment = "Fix createdb tb_ctn double insert"
 
         print("AMProxy " + version)
         print("Version Comment: " + version_comment)
