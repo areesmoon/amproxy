@@ -1005,14 +1005,14 @@ if len(args)>=2:
 AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
 
 To start an application, edit the existing docker-compose.yaml.template template file and run the following command:
-{app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_of_backend_server
+{app_name} create your-app-name -p external_port:internal_port:statistic_port --replicas=number_of_backend_server
 
-Example: {app_name} create app hello-world -p 81:80:82 --replicas=10
+Example: {app_name} create hello-world -p 81:80:82 --replicas=10
 
 Available commands:
 create      Create the application, see the above example
             - options: --image, --replicas --port
-createdb    Create application database from a running application
+createdb    Create application database from an already running AMProxy application
             - options: --image, --port
 digest      Get SHA256 digest from a docker repo
             Example:
@@ -1028,13 +1028,15 @@ scale       Scale up / down the running application
             Example:
             - {app_name} scale hello-world --replicas=20
 update      Update container with the newest image, done half by half
-            - options: -fo / --force
-delete      To delete the application and all resources
+            - options: -fo / --force, -st / --strategy
+            Example:
+            - {app_name} update -fo -st 1b1
+delete      To delete an application and its all running container
 reset       Reset application database (containers must be deleted manually)
 proc        To show running instance of backend service
 top         To show CPU and memory usage by all resources
 docker      To run any docker's related command (followed by docker related command's parameters)
-logs        To see log of the running process
+logs        To see interactive logs of the running containers
             - options: --proxy, --worker [worker_no]:[worker_no]
             Example:
             - {app_name} logs --proxy (to see proxy logs)
