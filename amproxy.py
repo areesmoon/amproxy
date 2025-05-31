@@ -8,6 +8,7 @@ import math
 import yaml
 import re
 import signal
+import argparse
 
 
 # NOTE:
@@ -21,7 +22,7 @@ def db_escape_field(field):
     return field.replace("'", "''")
 
 def db_execute(query):
-    if check_arg("-d"): print("Running query: " + query)
+    if args.debug: print("Running query: " + query)
     conn = sqlite3.connect(file_db)
     cursor = conn.execute(query)
     rows = []
@@ -33,7 +34,7 @@ def db_execute(query):
     
 def db_select(table, by, field):
     query = "select * from " + table + " where " + by + " = '" + str(field) + "'"
-    if check_arg("-d"): print("Running query: " + query)
+    if args.debug: print("Running query: " + query)
     rows = db_execute(query)
     if len(rows)>0:
         return rows[0]
@@ -48,42 +49,18 @@ def replace_variable(text):
 def get_indent(num):
     return " " * num * 4
 
-def check_arg(arg):
-    global args
-    for i in args:
-        if i==arg:
-            return True
-    return False
-
-def get_arg(index):
-    global args
-    if len(args) >= index + 1: return args[index]
-    else: return ""
-
-def get_arg_after(after):
-    global args
-    for i in range(0, len(args)-1):
-        if args[i]==after:
-            return args[i+1]
-
 def get_app():
-    return get_arg_after("-n")
+    return args.app_name
 
 def get_app_prefix(app):
     return app + '-'
-
-def checkArg(index):
-    return index <= len(sys.argv)
 
 def list2json(list):
     str_resp = ''.join(map(str, list))
     return json.loads(str_resp)
 
-def split_command_args(command):
-    return command.split(" ")
-
 def run_command(command, attach = False):
-    if check_arg("-d"): print("Running command: {}".format(command))
+    if args.debug: print("Running command: {}".format(command))
     if attach:
         params = command.split(" ")
         subprocess.call(params)
@@ -122,7 +99,6 @@ def network_create(app):
         print("Network " + get_app_prefix(app) + 'net' + " is created")
     
 def network_get(app):
-    global args
     resp = run_docker_command("network inspect " + get_app_prefix(app) + 'net')
     print_json(list2json(resp))
     
@@ -312,20 +288,21 @@ To start an application, prepare the docker-compose.yaml.template file and run t
 {app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_backend_server
 Example: create app hello-world -p 81:80:82 --replicas=10''')
     
-def app_createdb(app):
-    if check_arg("-fo"): db_reset()
+def app_createdb():
+    app = args.app_name
+    if args.force: db_reset()
     row_app = db_execute("select * from tb_app where name = '" + app + "'")
     if len(row_app)==0:
-        ports = known_args["ports"]
+        ports = args.port
         if ports is None: ports = "80:80:8040"
         
         # load docker-compose.yaml.template or supplied file
-        image = get_arg_after("-i")
+        image = args.image
         if image is not None:
             tpl_dc = tpl_default
             tpl_dc = tpl_dc.replace("${image}", image)
         else:
-            file_dc = get_arg_after("-f")
+            file_dc = args.file
             file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
             f = open(file_dc, 'r')
             tpl_dc = f.read()
@@ -362,20 +339,21 @@ def app_createdb(app):
         print("There is already application named " + row_app[0][1] + " existed in this directory")
         print("Run \"" + app_name + " start\" to start " + row_app[0][1] + " application now")
 
-def app_create(app):
+def app_create():
+    app = args.app_name
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==0:
-        ports = known_args["ports"]
+        ports = args.port
         if ports is None: ports = "80:80:8040"
-        replicas = int(known_args["replicas"])
+        replicas = args.replicas
         
         # load docker-compose.yaml.template or supplied file
-        image = get_arg_after("-i")
+        image = args.image
         if image is not None:
             tpl_dc = tpl_default
             tpl_dc = tpl_dc.replace("${image}", image)
         else:
-            file_dc = get_arg_after("-f")
+            file_dc = args.file
             file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
             f = open(file_dc, 'r')
             tpl_dc = f.read()
@@ -530,7 +508,7 @@ def app_scale():
             print("Application exists, scaling is possible")
             
             old_replicas = db_execute("select count(*) as num from tb_ctn where app_id = '" + str(app_id) + "'")[0][0]
-            new_replicas = int(known_args["replicas"])
+            new_replicas = args.replicas
             
             if(new_replicas > old_replicas):
                 print("Performing up scale...")
@@ -588,6 +566,10 @@ def docker_get_digest(repo):
             return ar_resp[1].rstrip(",")
     return ""
 
+def app_digest():
+    digest = docker_get_digest(args.image)
+    print(digest)
+
 def docker_pull(repo):
     subprocess.call(["docker", "pull", repo])
 
@@ -625,9 +607,9 @@ def app_update():
             docker_pull(image)
             new_digest = docker_get_digest(image)
             
-            if new_digest != old_digest or check_arg("-fo"):
+            if new_digest != old_digest or args.force:
                 print("Updating application " + app)
-                if(get_arg_after("-st")=='1b1'):
+                if(args.strategy=='1b1'):
                     print("Update strategy will be done one by one: new 1 up, old 1 down, etc until all container updated")
                     
                     print("Continue update? (y / n)")
@@ -773,93 +755,164 @@ def app_proc():
         
 def app_exec():
     row_app = db_execute("select * from tb_app limit 0,1")
-    if len(row_app)==1:
-        app = row_app[0][1]
-        if get_arg(2)!="":
-            params = ["docker", "exec", "-it", app + "-" + get_arg(2)]
-            i = -1
-            for arg in args:
-                i = i + 1
-                if i > 2:
-                    params.append(arg)
-            if check_arg("-d"): print("Running: " + str(params))
-            subprocess.call(params)
+    if len(row_app) == 1:
+        app_name = row_app[0][1]
+        container_name = f"{app_name}-{args.worker_no}"
+        params = ["docker", "exec", "-it", container_name] + args.docker_args
+        if args.debug:
+            print("Running:", " ".join(params))
+        subprocess.call(params)
     else:
         info_app_not_found("bash")
         
-def app_logs():
-    row_app = db_execute("select * from tb_app limit 0,1")
-    if len(row_app)==1:
-        app_id = row_app[0][0]
-        if get_arg(2)=='--proxy':
-            # create proxy docker compose file
-            create_proxy_service(app_id, yaml_logs)
-        elif get_arg(2)=='--worker':
-            if get_arg(3)=='':
-                tmp_row = db_execute("select ifnull(min(no),0) as min_no, ifnull(max(no),0) as max_no from tb_ctn where app_id = '" + str(app_id) + "'")
-                ar_no = []
-                ar_no.append(tmp_row[0][0])
-                ar_no.append(tmp_row[0][1])
-            else:
-                ar_no = get_arg(3).split(":")
-                if len(ar_no)==1:
-                    ar_no.append(ar_no[0])
-            create_service_iterable(app_id, int(ar_no[1])-int(ar_no[0]) + 1, yaml_logs, int(ar_no[0]), int(ar_no[1]))
-        else:
-            # create full docker compose file
-            create_service_full(app_id, yaml_logs)
-        
-        # execute docker compose up
-        print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")
-        print("Continue? (y / n)")
-        r = input()
-        if(r=='y'):
-            docker_compose(yaml_logs, "", True)
-    else:
+def app_logs(args):
+    row_app = db_execute("SELECT * FROM tb_app LIMIT 1")
+    if len(row_app) != 1:
         info_app_not_found("get info")
+        return
+
+    app_id = row_app[0][0]
+
+    if args.proxy:
+        create_proxy_service(app_id, yaml_logs)
+
+    elif args.worker:
+        if args.range is None:
+            tmp_row = db_execute(
+                f"SELECT IFNULL(MIN(no),0), IFNULL(MAX(no),0) FROM tb_ctn WHERE app_id = '{app_id}'"
+            )
+            min_no, max_no = tmp_row[0][0], tmp_row[0][1]
+        else:
+            try:
+                parts = args.range.split(":")
+                if len(parts) == 1:
+                    min_no = max_no = int(parts[0])
+                else:
+                    min_no = int(parts[0])
+                    max_no = int(parts[1])
+            except:
+                print("Invalid range format. Use format like 0:5 or 3.")
+                return
+
+        total = max_no - min_no + 1
+        create_service_iterable(app_id, total, yaml_logs, min_no, max_no)
+
+    else:
+        create_service_full(app_id, yaml_logs)
+
+    print("Please do not press CTRL + C to prevent containers from stopping. Close the window instead!")
+    print("Continue? (y / n)")
+    r = input().strip().lower()
+    if r == 'y':
+        docker_compose(yaml_logs, "", True)
         
-def app_docker():
-    params = ["docker"]
-    i = -1
-    for arg in args:
-        i = i + 1
-        if i > 1:
-            params.append(arg)
-    if check_arg("-d"): print("Running: " + str(params))
+def app_docker(docker_args, debug=False):
+    params = ["docker"] + docker_args
+    if debug:
+        print("Running:", " ".join(params))
     subprocess.call(params)
+    
+def main():
+    global parser
+    global args
+    parser = argparse.ArgumentParser(description="AMProxy - Load balancer for multiple docker containers")
+    
+    # debug flag
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
+
+    # version flag
+    parser.add_argument("-v", "--version", action="store_true", help="Show version info")
+    
+    # subparsers
+    subparsers = parser.add_subparsers(dest="command")
+
+    # create command
+    create_parser = subparsers.add_parser("create", help="Create the application")
+    create_parser.add_argument("app_name", help="Name of the application")
+    create_parser.add_argument("-p", "--port", help="Ports in format external:internal:statistic")
+    create_parser.add_argument("-r", "--replicas", type=int, help="Number of backend server instances")
+    create_parser.add_argument("-i", "--image", help="Container docker image")
+    create_parser.add_argument("-f", "--file", help="Custom YAML file to use")
+    create_parser.add_argument("-s", "--start", action="store_true", help="Start application after create")
+    create_parser.set_defaults(func=app_create)
+
+    # createdb command
+    createdb_parser = subparsers.add_parser("createdb", help="Create application database")
+    createdb_parser.add_argument("app_name", help="Name of the application")
+    createdb_parser.add_argument("-p", "--port", help="Ports in format external:internal:statistic")
+    createdb_parser.add_argument("-r", "--replicas", type=int, help="Number of backend server instances")
+    createdb_parser.add_argument("-i", "--image", help="Container docker image")
+    createdb_parser.add_argument("-f", "--file", help="Custom YAML file to use")
+    createdb_parser.set_defaults(func=app_createdb)
+
+    # start command
+    start_parser = subparsers.add_parser("start", help="Start the already created application")
+    start_parser.set_defaults(func=app_start)
+
+    # stop command
+    stop_parser = subparsers.add_parser("stop", help="Stop the currently running application")
+    stop_parser.set_defaults(func=app_stop)
+
+    # scale command
+    scale_parser = subparsers.add_parser("scale", help="Scale up/down running application")
+    scale_parser.add_argument("-r", "--replicas", type=int, required=True, help="Number of replicas")
+    scale_parser.set_defaults(func=app_scale)
+
+    # update command
+    update_parser = subparsers.add_parser("update", help="Update container with newest image")
+    update_parser.add_argument("-fo", "--force", action="store_true", help="Force update even if image not new")
+    update_parser.add_argument("-st", "--strategy", choices=["hbh", "1b1"], default="hbh", help="Update strategy: 'hbh' = half-by-half, '1b1' = one-by-one (rolling)")
+    update_parser.set_defaults(func=app_update)
+    
+    # delete command
+    delete_parser = subparsers.add_parser("delete", help="To delete an application and its all running container")
+    delete_parser.set_defaults(func=app_delete)
+    
+    # reset command
+    reset_parser = subparsers.add_parser("reset", help="Reset application database (containers must be deleted manually)")
+    reset_parser.set_defaults(func=app_reset)
+    
+    # proc command
+    proc_parser = subparsers.add_parser("proc", help="To show running instance of backend service")
+    proc_parser.set_defaults(func=app_proc)
+
+    # top command
+    top_parser = subparsers.add_parser("top", help="To show CPU and memory usage by all resources")
+    top_parser.set_defaults(func=app_top)
+
+    # logs command
+    logs_parser = subparsers.add_parser("logs", help="Show interactive logs")
+    logs_parser.add_argument("--proxy", action="store_true", help="Use proxy service only")
+    logs_parser.add_argument("--worker", action="store_true", help="Use worker service only")
+    logs_parser.add_argument("--range", help="Worker range in format MIN:MAX or just a single number")
+    logs_parser.set_defaults(func=app_logs)
+
+    # exec command
+    exec_parser = subparsers.add_parser("exec", help="Run command inside worker or proxy container")
+    exec_parser.add_argument("worker_no", help="Worker number or 'proxy'")
+    exec_parser.add_argument("docker_args", nargs=argparse.REMAINDER, help="Arguments to pass to docker exec (example: bash, sh, etc.)")
+    exec_parser.set_defaults(func=app_exec)
+
+    # docker command
+    docker_parser = subparsers.add_parser("docker", help="Run docker commands")
+    docker_parser.add_argument("docker_args", nargs=argparse.REMAINDER, help="Arguments for docker")
+    docker_parser.set_defaults(func=app_docker)
+
+    # digest command
+    digest_parser = subparsers.add_parser("digest", help="Get SHA256 digest from docker repo")
+    digest_parser.add_argument("image", help="Docker image name")
+    digest_parser.set_defaults(func=app_digest)
+
+    args = parser.parse_args()
 
 # capture CTRL + C
 signal.signal(signal.SIGINT, signal_handler)
 
-# get args
-str_args = " ".join(sys.argv).replace("=", " ")
+# args
+parser = None
+args = None
 
-# simplify args
-args1 = str_args.split(" ")
-args = []
-for arg in args1:
-    if arg=='--debug': arg = '-d'
-    if arg=='--port': arg = '-p'
-    if arg=='--replicas': arg = '-r'
-    if arg=='--interactive': arg = '-i'
-    if arg=='--start': arg = '-s'
-    if arg=='--strategy': arg = '-st'
-    if arg=='--force-update': arg = '-fu'
-    if arg=='--file': arg = '-f'
-    if arg=='--version': arg = '-v'
-    if arg=='--force': arg = '-fo'
-    args.append(arg)
-
-# known args
-known_args = {}
-known_args["app"] = get_arg_after("-a")
-known_args["ports"] = get_arg_after("-p")
-known_args["replicas"] = get_arg_after("-r")
-known_args["file"] = get_arg_after("-f")
-
-# debug args
-if check_arg("-d"):
-    print("Passed Arguments: " + str(args))
+main()
 
 app_title = "AMProxy"
 app_name = "amproxy"
@@ -938,17 +991,16 @@ yaml_itr = "_itr.yaml"
 yaml_full = "docker-compose.yaml"
 yaml_logs = "_logs.yaml"
 
-if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
+if not (args.version or args.command in ["docker", None]):
     if not os.path.exists(tmpdir):
-        os.mkdir(tmpdir)        
+        os.mkdir(tmpdir)
     if not os.path.exists(dir_cfg):
         os.mkdir(dir_cfg)
     if not os.path.exists(dir_db):
         os.mkdir(dir_db)
 
 # prepare database
-
-if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
+if not (args.version or args.command in ["docker", None]):
     if not os.path.exists(file_db):
         conn = sqlite3.connect(file_db)
         conn.execute('''CREATE TABLE tb_app
@@ -971,96 +1023,25 @@ if not (get_arg(1)=="-v" or get_arg(1)=="docker" or get_arg(1)==""):
 
 obj_replace = {}
 
-if len(args)>=2:
-    if args[1]=="create": app_create(args[2])
-    elif args[1]=="createdb": app_createdb(args[2])
-    elif args[1]=="start": app_start()
-    elif args[1]=="stop": app_stop()
-    elif args[1]=="delete": app_delete()
-    elif args[1]=="scale": app_scale()        
-    elif args[1]=="update": app_update()
-    elif args[1]=="reset": app_reset()
-    elif args[1]=="proc": app_proc()
-    elif args[1]=="top": app_top()
-    elif args[1]=="logs": app_logs()
-    elif args[1]=="exec": app_exec()
-    elif args[1]=="docker": app_docker()
-    elif args[1]=="digest":
-        if get_arg(2)!="":
-            digest = docker_get_digest(get_arg(2))
-            print(digest)
-    elif args[1]=="-v":
-        version = "v1.0.21"
-        version_comment = "Remove container and its associated volume"
+if args.debug:
+        print("[DEBUG] Args parsed:")
+        print(vars(args))
 
-        print("AMProxy " + version)
-        print("Version Comment: " + version_comment)
-        print("License: GNU General Public License v3")
-        print("Author: Aris Munawar, S. T., M. Sc.")
-        print("Repositories:")
-        print("- Medium: https://medium.com/@areesmoon")
-        print("- Github: https://github.com/areesmoon/")
-        print("- Docker: https://hub.docker.com/u/areesmoon")
-    else: print(f'''
-AMProxy is an easy to use manageable load balancer for multiple docker containers. It utilizes HAProxy inside the lightweight linux alpine distribution docker image.
+if args.version:
+    version = "v1.0.22"
+    version_comment = "Use standard argument parser for command line arguments"
 
-To start an application, edit the existing docker-compose.yaml.template template file and run the following command:
-{app_name} create your-app-name -p external_port:internal_port:statistic_port --replicas=number_of_backend_server
+    print("AMProxy " + version)
+    print("Version Comment: " + version_comment)
+    print("License: GNU General Public License v3")
+    print("Author: Aris Munawar, S. T., M. Sc.")
+    print("Repositories:")
+    print("- Medium: https://medium.com/@areesmoon")
+    print("- Github: https://github.com/areesmoon/")
+    print("- Docker: https://hub.docker.com/u/areesmoon")
+    sys.exit()
 
-Example: {app_name} create hello-world -p 81:80:82 --replicas=10
-
-Available commands:
-create      Create the application, see the above example
-            - options: --image, --replicas --port
-createdb    Create application database from an already running AMProxy application
-            - options: --image, --port
-digest      Get SHA256 digest from a docker repo
-            Example:
-            - {app_name} digest php:alpine
-exec        Run command inside worker container or proxy container
-            - option: proxy, worker_no
-            Example:
-            - {app_name} exec 5 bash (this will run bash inside container app-name-5)
-start       Start the already created application
-stop        Stop currently running application
-scale       Scale up / down the running application
-            - options: -r / --replicas
-            Example:
-            - {app_name} scale hello-world --replicas=20
-update      Update container with the newest image, done half by half
-            - options: -fo / --force, -st / --strategy
-            Example:
-            - {app_name} update -fo -st 1b1
-delete      To delete an application and its all running container
-reset       Reset application database (containers must be deleted manually)
-proc        To show running instance of backend service
-top         To show CPU and memory usage by all resources
-docker      To run any docker's related command (followed by docker related command's parameters)
-logs        To see interactive logs of the running containers
-            - options: --proxy, --worker [worker_no]:[worker_no]
-            Example:
-            - {app_name} logs --proxy (to see proxy logs)
-            - {app_name} logs --worker 2:5 (to see log worker no 2 to 5)
-
-Available parameters:
--d, --debug         Show command run by AMProxy internal process for debug purpose
--f, --file [file]   Specify custom yaml file
--fo, --force        Force update even if the image is not new (used with update)
--i, --image         Container's docker image (direct app creation without docker-compose.yaml.template)
--p, --port          Ports setting, consists of three ports, external_port:internal_port:statistic_port
-                    - external_port: externally accessible port for your application service
-                    - internal_port: internal / service container port (for http usually 80)
-                    - statistic_por: externally accessible port for load balancer statistic
--r, --replicas      Number of backend server instances
--s, --start         To directly start application after created
--st, --strategy     Update strategy:
-                    - hbh: half by half (default, container will be replace 50% by 50%)
-                    - 1b1: one by one (container will be updated 1 by 1)
--v, --version       Show current application version
-
-Upon started, your application is available at the following URL:
-- Application service: http://localhost:external_port
-- Load balancing statistic: http://localhost:statistic_port
-''')
+if hasattr(args, "func"):
+    args.func()
 else:
-    print("No argument supplied")
+    parser.print_help()
