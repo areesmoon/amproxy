@@ -814,7 +814,7 @@ def app_exec():
     else:
         info_app_not_found("bash")
         
-def app_logs(args):
+def app_logs():
     row_app = db_execute("SELECT * FROM tb_app LIMIT 1")
     if len(row_app) != 1:
         info_app_not_found("get info")
