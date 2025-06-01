@@ -288,16 +288,47 @@ To start an application, prepare the docker-compose.yaml.template file and run t
 {app_name} create app your-app-name -p external_port:internal_port:statistic_port --replicas=number_backend_server
 Example: create app hello-world -p 81:80:82 --replicas=10''')
     
+def get_ports(container_name):
+    result = subprocess.run(["docker", "port", container_name], capture_output=True, text=True)
+    output = result.stdout.strip().splitlines()
+
+    external_port = None
+    internal_port = None
+    statistic_port = None
+
+    for line in output:
+        match = re.match(r"(\d+)/tcp -> .*:(\d+)", line)
+        if match:
+            internal = int(match.group(1))
+            external = int(match.group(2))
+            if internal == 80:
+                internal_port = internal
+                external_port = external
+            elif internal == 8404:
+                statistic_port = external
+
+    return str(external_port) + ":" + str(internal_port) + ":" + str(statistic_port)
+
+def get_top_app_container_name(app):
+    cmd = f'ps -a -f "name=^{app}-([0-9]+$)" --format "{{{{.Names}}}}"'
+    list_resp = run_docker_command(cmd)
+    return list_resp[0] if len(list_resp) > 0 else None
+
+def get_top_app_container_image(app):
+    cmd = f'ps -a -f "name=^{app}-([0-9]+$)" --format "{{{{.Image}}}}"'
+    list_resp = run_docker_command(cmd)
+    return list_resp[0] if len(list_resp) > 0 else None
+    
 def app_createdb():
     app = args.app_name
     if args.force: db_reset()
     row_app = db_execute("select * from tb_app where name = '" + app + "'")
     if len(row_app)==0:
-        ports = args.port
+        ports = get_ports(app + "-proxy")
         if ports is None: ports = "80:80:8040"
         
         # load docker-compose.yaml.template or supplied file
-        image = args.image
+        image = get_top_app_container_image(app)
         if image is not None:
             tpl_dc = tpl_default
             tpl_dc = tpl_dc.replace("${image}", image)
@@ -827,7 +858,15 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # create command
-    create_parser = subparsers.add_parser("create", help="Create the application")
+    create_parser = subparsers.add_parser(
+        "create",
+        help="Create the application",
+        description="""Create the application
+
+example:
+  amproxy create hello-world -p 81:80:82 --replicas=10""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     create_parser.add_argument("app_name", help="Name of the application")
     create_parser.add_argument("-p", "--port", help="Ports in format external:internal:statistic")
     create_parser.add_argument("-r", "--replicas", type=int, help="Number of backend server instances")
@@ -837,69 +876,114 @@ def main():
     create_parser.set_defaults(func=app_create)
 
     # createdb command
-    createdb_parser = subparsers.add_parser("createdb", help="Create application database")
+    createdb_parser = subparsers.add_parser("createdb",
+        help="Create database from an already running AMProxy application",
+        description="Create database from an already running AMProxy application"
+    )
     createdb_parser.add_argument("app_name", help="Name of the application")
-    createdb_parser.add_argument("-p", "--port", help="Ports in format external:internal:statistic")
-    createdb_parser.add_argument("-r", "--replicas", type=int, help="Number of backend server instances")
-    createdb_parser.add_argument("-i", "--image", help="Container docker image")
+    createdb_parser.add_argument("-fo", "--force", action="store_true", help="Force reset application database")
     createdb_parser.add_argument("-f", "--file", help="Custom YAML file to use")
     createdb_parser.set_defaults(func=app_createdb)
 
     # start command
-    start_parser = subparsers.add_parser("start", help="Start the already created application")
+    start_parser = subparsers.add_parser("start",
+        help="Start the already created application",
+        description="Start the already created application"
+    )
     start_parser.set_defaults(func=app_start)
 
     # stop command
-    stop_parser = subparsers.add_parser("stop", help="Stop the currently running application")
+    stop_parser = subparsers.add_parser("stop", 
+        help="Stop the currently running application",
+        description="Stop the currently running application"
+    )
     stop_parser.set_defaults(func=app_stop)
 
     # scale command
-    scale_parser = subparsers.add_parser("scale", help="Scale up/down running application")
+    scale_parser = subparsers.add_parser("scale",
+        help="Scale up/down a running application",
+        description="""Scale up/down a running application
+
+example:
+  amproxy scale -r 5""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     scale_parser.add_argument("-r", "--replicas", type=int, required=True, help="Number of replicas")
     scale_parser.set_defaults(func=app_scale)
 
     # update command
-    update_parser = subparsers.add_parser("update", help="Update container with newest image")
+    update_parser = subparsers.add_parser("update",
+        help="Update application's containers with newest image",
+        description="""Update application's containers with newest image
+
+example:
+  amproxy update -fo -st 1b1""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     update_parser.add_argument("-fo", "--force", action="store_true", help="Force update even if image not new")
     update_parser.add_argument("-st", "--strategy", choices=["hbh", "1b1"], default="hbh", help="Update strategy: 'hbh' = half-by-half, '1b1' = one-by-one (rolling)")
     update_parser.set_defaults(func=app_update)
     
     # delete command
-    delete_parser = subparsers.add_parser("delete", help="To delete an application and its all running container")
+    delete_parser = subparsers.add_parser("delete",
+        help="To delete an application and its all running container",
+        description="To delete an application and its all running container"
+    )
     delete_parser.set_defaults(func=app_delete)
-    
+
     # reset command
-    reset_parser = subparsers.add_parser("reset", help="Reset application database (containers must be deleted manually)")
+    reset_parser = subparsers.add_parser("reset",
+        help="Reset application database (containers must be deleted manually)",
+        description="Reset application database (containers must be deleted manually)"
+        )
     reset_parser.set_defaults(func=app_reset)
-    
+
     # proc command
-    proc_parser = subparsers.add_parser("proc", help="To show running instance of backend service")
+    proc_parser = subparsers.add_parser("proc",
+        help="To show running instance of backend service",
+        description="To show running instance of backend service"
+    )
     proc_parser.set_defaults(func=app_proc)
 
     # top command
-    top_parser = subparsers.add_parser("top", help="To show CPU and memory usage by all resources")
+    top_parser = subparsers.add_parser("top",
+        help="To show CPU and memory usage by all resources",
+        description="To show CPU and memory usage by all resources"
+    )
     top_parser.set_defaults(func=app_top)
 
     # logs command
-    logs_parser = subparsers.add_parser("logs", help="Show interactive logs")
+    logs_parser = subparsers.add_parser("logs",
+        help="Show interactive logs",
+        description="Show interactive logs"
+    )
     logs_parser.add_argument("--proxy", action="store_true", help="Use proxy service only")
     logs_parser.add_argument("--worker", action="store_true", help="Use worker service only")
     logs_parser.add_argument("--range", help="Worker range in format MIN:MAX or just a single number")
     logs_parser.set_defaults(func=app_logs)
 
     # exec command
-    exec_parser = subparsers.add_parser("exec", help="Run command inside worker or proxy container")
+    exec_parser = subparsers.add_parser("exec",
+        help="Run command inside worker or proxy container",
+        description="Run command inside worker or proxy container"
+    )
     exec_parser.add_argument("worker_no", help="Worker number or 'proxy'")
     exec_parser.add_argument("docker_args", nargs=argparse.REMAINDER, help="Arguments to pass to docker exec (example: bash, sh, etc.)")
     exec_parser.set_defaults(func=app_exec)
 
     # docker command
-    docker_parser = subparsers.add_parser("docker", help="Run docker commands")
+    docker_parser = subparsers.add_parser("docker",
+        help="Run docker commands",
+        description="Run docker commands"
+    )
     docker_parser.add_argument("docker_args", nargs=argparse.REMAINDER, help="Arguments for docker")
     docker_parser.set_defaults(func=app_docker)
 
     # digest command
-    digest_parser = subparsers.add_parser("digest", help="Get SHA256 digest from docker repo")
+    digest_parser = subparsers.add_parser("digest", 
+        help="Get SHA256 digest from docker repo",
+        description="Get SHA256 digest from docker repo"
+    )
     digest_parser.add_argument("image", help="Docker image name")
     digest_parser.set_defaults(func=app_digest)
 
