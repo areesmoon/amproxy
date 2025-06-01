@@ -1021,7 +1021,7 @@ app_name = "amproxy"
 
 tpl_proxy = '''
     ${app}-proxy:
-        image: haproxytech/haproxy-alpine:2.4
+        image: haproxytech/haproxy-alpine
         container_name: ${app}-proxy
         restart: always
         ports:
