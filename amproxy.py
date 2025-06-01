@@ -417,6 +417,9 @@ def app_create():
         # create config haproxy.cfg
         update_haproxy_cfg(app_id)
         
+        # create network
+        app_network_create(app)
+        
         # get non iterable container for checking purpose 
         ctn_non_iterable = get_non_iterable_container_tpl(tpl_dc)
         ctn_non_iterable = clean_yaml(ctn_non_iterable)
@@ -516,9 +519,6 @@ def app_delete():
     if len(row)==1:
         app = row[0][1]
         
-        container1 = get_top_app_container_name(app)
-        network_name = get_container_network_name(container1)
-        
         resp = run_docker_command("ps -a -f \"name=^" + app + "-[^-]+$\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
@@ -527,8 +527,11 @@ def app_delete():
                 if resp == "":
                     print("Failed!")
                     
-        # Delete network
-        network_delete(network_name)
+        print("Deleting app network " + app + "-net")
+        resp = run_docker_command("network rm " + app + "-net")
+        if len(resp)>0:
+            if resp == "":
+                print("Failed!")
         
         # delete record
         print("Deleting app data")
@@ -1031,6 +1034,7 @@ tpl_proxy = '''
 tpl_network = '''
 networks:
     ${app}-net:
+        external: true
 '''
 
 tpl_cfg = '''
