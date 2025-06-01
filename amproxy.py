@@ -91,24 +91,31 @@ def docker_compose(file, option="", attach=False):
     command = "compose -f " + file + " up" + (" " + option if option != "" else "")
     run_docker_command(command, attach)
     
-def network_create(app):
+def app_network_create(app):
     resp = run_docker_command("network create --driver=bridge " + get_app_prefix(app) + 'net')
     if resp==[]:
         print("Network " + get_app_prefix(app) + 'net' + " already existed")
     else:
         print("Network " + get_app_prefix(app) + 'net' + " is created")
     
-def network_get(app):
+def app_network_get(app):
     resp = run_docker_command("network inspect " + get_app_prefix(app) + 'net')
     print_json(list2json(resp))
     
-def network_delete(app):
+def app_network_delete(app):
     resp = run_docker_command("network rm " + get_app_prefix(app) + 'net')
     if(resp==[]):
         print("Network not found")
     elif(resp[0]==get_app_prefix(app) + 'net'):
         print("Network " + get_app_prefix(app) + 'net' + " is deleted")
         
+def network_delete(network_name):
+    resp = run_docker_command("network rm " + network_name)
+    if(resp==[]):
+        print("Network not found")
+    elif(resp[0]==network_name):
+        print("Network " + network_name + " is deleted")
+
 def update_obj_replace(app_id):
     row_app = db_select("tb_app", "id", app_id)
     app = row_app[1]
@@ -410,8 +417,6 @@ def app_create():
         # create config haproxy.cfg
         update_haproxy_cfg(app_id)
         
-        # create network
-        
         # get non iterable container for checking purpose 
         ctn_non_iterable = get_non_iterable_container_tpl(tpl_dc)
         ctn_non_iterable = clean_yaml(ctn_non_iterable)
@@ -497,10 +502,23 @@ def app_reset():
     db_reset()
     print("Application database has been reset")
     
+def get_container_network_name(container_name):
+    output = run_docker_command(
+        f"inspect -f '{{{{json .NetworkSettings.Networks}}}}' {container_name}"
+    )
+    if output:
+        networks = json.loads(output[0])
+        return list(networks.keys())[0] if networks else None
+    return None
+
 def app_delete():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
         app = row[0][1]
+        
+        container1 = get_top_app_container_name(app)
+        network_name = get_container_network_name(container1)
+        
         resp = run_docker_command("ps -a -f \"name=^" + app + "-[^-]+$\" --format {{.Names}}")
         if(len(resp)>0):
             for container in resp:
@@ -508,6 +526,9 @@ def app_delete():
                 resp = stop_delete_container(container)
                 if resp == "":
                     print("Failed!")
+                    
+        # Delete network
+        network_delete(network_name)
         
         # delete record
         print("Deleting app data")
