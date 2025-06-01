@@ -6,4 +6,4 @@
 # Pip libraries:
 # - pyyaml
 # - pyinstaller
-pyinstaller amproxy.py --onefile
+pyinstaller --onefile --additional-hooks-dir=hooks amproxy.py

@@ -11,3 +11,5 @@
 !deploy
 !README.md
 !amproxy.spec
+!hooks/
+!hooks/**
