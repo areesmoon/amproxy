@@ -10,7 +10,6 @@
 !install
 !deploy
 !README.md
-!amproxy.spec
 !hooks/
 !hooks/**
 !requirements.txt
