@@ -13,3 +13,4 @@
 !amproxy.spec
 !hooks/
 !hooks/**
+!requirements.txt
