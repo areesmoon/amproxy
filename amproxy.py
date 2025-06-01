@@ -1130,8 +1130,8 @@ if args.debug:
         print(vars(args))
 
 if args.version:
-    version = "v1.0.22"
-    version_comment = "Use standard argument parser for command line arguments"
+    version = "v1.0.34"
+    version_comment = "Installation Ok"
 
     print("AMProxy " + version)
     print("Version Comment: " + version_comment)
