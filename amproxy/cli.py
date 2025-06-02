@@ -208,6 +208,7 @@ def network_delete(network_name):
         print("Network " + network_name + " is deleted")
 
 def update_obj_replace(app_id):
+    global obj_replace
     row_app = db_select("tb_app", "id", app_id)
     app = row_app[1]
     ports = row_app[2]
@@ -971,6 +972,8 @@ Profile & Repositories:
 """
 
 def main():
+    global parser
+    global args
     # capture CTRL + C
     signal.signal(signal.SIGINT, signal_handler)
     
