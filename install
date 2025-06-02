@@ -1,2 +1,0 @@
-#!/bin/sh
-yes | cp dist/amproxy /usr/local/bin/
