@@ -9,6 +9,8 @@ import yaml
 import re
 import signal
 import argparse
+from math import gcd
+from functools import reduce
 from .version import __version__, __commit__, __released__
 
 # NOTE:
@@ -23,6 +25,7 @@ from .version import __version__, __commit__, __released__
 parser = None
 args = None
 obj_replace = {}
+indent_char = "    "
 
 app_title = "AMProxy"
 app_name = "amproxy"
@@ -34,28 +37,28 @@ dir_db = tmpdir + "/db"
 file_db = dir_db + "/" + app_name + ".db"
 
 # temp yaml
+yaml_full = "_full.yaml"
 yaml_proxy = "_proxy.yaml"
 yaml_non_itr = "_non_itr.yaml"
 yaml_itr = "_itr.yaml"
-yaml_full = "docker-compose.yaml"
 yaml_logs = "_logs.yaml"
 
 tpl_proxy = '''
-    ${app}-proxy:
-        image: haproxytech/haproxy-alpine
-        container_name: ${app}-proxy
-        restart: always
-        ports:
-            - ${external_port}:80
-            - ${statistic_port}:8404
-        volumes:
-            - ./auto_generated/cfg:/usr/local/etc/haproxy:ro
+${id}${app}-proxy:
+${id}${id}image: haproxytech/haproxy-alpine
+${id}${id}container_name: ${app}-proxy
+${id}${id}restart: always
+${id}${id}ports:
+${id}${id}${id}- ${external_port}:80
+${id}${id}${id}- ${statistic_port}:8404
+${id}${id}volumes:
+${id}${id}${id}- ./auto_generated/cfg:/usr/local/etc/haproxy:ro
 '''
 
 tpl_network = '''
 networks:
-    ${app}-net:
-        external: true
+${id}${app}-net:
+${id}${id}external: true
 '''
 
 tpl_cfg = '''
@@ -89,15 +92,15 @@ tpl_default = '''
 services:
 ### NON ITERABLE CONTAINER BLOCK ###
 ### ITERABLE CONTAINER BLOCK ###
-    ${app}-${no}:
-        image: ${image}
-        container_name: ${app}-${no}
-        restart: always
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
+${id}${app}-${no}:
+${id}${id}image: ${image}
+${id}${id}container_name: ${app}-${no}
+${id}${id}restart: always
+${id}${id}extra_hosts:
+${id}${id}${id}- "host.docker.internal:host-gateway"
 '''
 
-tpl_container_network = "        " + "networks:\n" + "            " + "- ${app}-net"
+tpl_container_network = "${id}${id}" + "networks:\n" + "${id}${id}${id}" + "- ${app}-net"
 tpl_backend_server = "server s${no} ${app}-${no}:${container_port} check"
 
 
@@ -136,6 +139,48 @@ def replace_variable(text):
     for key in obj_replace:
         text = text.replace("${" + key + "}", obj_replace[key])
     return text
+
+def check_indentation(text):
+    indents = []
+    line_details = []
+    indent_char = None
+
+    lines = text.splitlines()
+
+    for line_num, line in enumerate(lines, 1):
+        raw_indent = line[:len(line) - len(line.lstrip())]
+        stripped = line.strip()
+
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if " " in raw_indent and "\t" in raw_indent:
+            return False, f"Line {line_num}: Mixed TAB and SPACE is not allowed", None
+        elif "\t" in raw_indent:
+            return False, f"Line {line_num}: Uses TAB (only SPACE allowed)", None
+
+        if indent_char is None and raw_indent:
+            indent_char = raw_indent  # Capture example indent
+
+        indent_size = len(raw_indent)
+        indents.append(indent_size)
+        line_details.append((line_num, indent_size))
+
+    unique_indents = sorted(set(indents))
+    if not unique_indents or len(unique_indents) == 1:
+        return True, "Indentation is consistent (no or single indent level)", indent_char or ""
+
+    unit = reduce(gcd, [i for i in unique_indents if i > 0])
+
+    for line_num, indent in line_details:
+        if indent % unit != 0:
+            return False, f"Line {line_num}: Indent {indent} is not a multiple of base unit {unit}", None
+
+    for i in range(1, len(unique_indents)):
+        if unique_indents[i] != unique_indents[i - 1] + unit:
+            return False, f"Indent jump from {unique_indents[i - 1]} to {unique_indents[i]} (expected {unique_indents[i - 1] + unit})", None
+
+    return True, f"Indentation is consistent with unit {unit} spaces", " " * unit
 
 def get_indent(num):
     return " " * num * 4
@@ -178,8 +223,8 @@ def clean_yaml(text):
                 new_text = new_text + "\n" + line
     return new_text
 
-def docker_compose(file, option="", attach=False):
-    command = "compose -f " + file + " up" + (" " + option if option != "" else "")
+def docker_compose(file, option="", attach=False, direction = "up"):
+    command = "compose -f " + file + " " + direction + (" " + option if option != "" else "")
     run_docker_command(command, attach)
     
 def app_network_create(app):
@@ -277,8 +322,10 @@ def create_proxy_service(app_id, yaml_file = None):
     proxy= replace_variable(tpl_proxy)
     container_network = replace_variable(tpl_container_network)
     network = replace_variable(tpl_network)
-        
+
     svc_proxy = "services:\n" + proxy + "\n" + container_network + "\n" + network
+    svc_proxy = svc_proxy.replace("${id}", indent_char)
+    
     yaml_file = yaml_file if yaml_file is not None else yaml_proxy
     f = open(yaml_file, "w")
     f.write(clean_yaml(svc_proxy))
@@ -299,6 +346,9 @@ def create_service_full(app_id, yaml_file=None):
     row_app = db_select("tb_app", "id", app_id)
     tpl_dc = row_app[3]
     
+    global indent_char
+    ok, msg, indent_char = check_indentation(tpl_dc)
+    
     ctn_non_iterable = get_non_iterable_container_tpl(tpl_dc)
     ctn_non_iterable = clean_yaml(ctn_non_iterable)
     if(ctn_non_iterable!=''):
@@ -314,6 +364,7 @@ def create_service_full(app_id, yaml_file=None):
         
     # close full_dc
     full_dc = full_dc + "\n" + network
+    full_dc = full_dc.replace("${id}", indent_char)
     
     # write to file
     yaml_file = yaml_file if yaml_file is not None else yaml_full
@@ -327,6 +378,9 @@ def create_service_non_iterable(app_id):
     row_app = db_select("tb_app", "id", app_id)
     tpl_dc = row_app[3]
     
+    global indent_char
+    ok, msg, indent_char = check_indentation(tpl_dc)
+    
     # prepare network
     container_network = replace_variable(tpl_container_network)
     network = replace_variable(tpl_network)
@@ -337,6 +391,8 @@ def create_service_non_iterable(app_id):
     svc_non_iterable = ""
     if(ctn_non_iterable!=''):
         svc_non_iterable = "services:\n" + ctn_non_iterable + "\n" + container_network + "\n" + network
+    
+    svc_non_iterable = svc_non_iterable.replace("${id}", indent_char)
     
     # write to yaml file
     f = open(yaml_non_itr, "w")
@@ -349,6 +405,9 @@ def create_service_iterable(app_id, n, yaml_file = None, start_no = None, stop_n
     
     row_app = db_select("tb_app", "id", app_id)
     tpl_dc = row_app[3]
+    
+    global indent_char
+    ok, msg, indent_char = check_indentation(tpl_dc)
     
     # prepare template
     container_network = replace_variable(tpl_container_network)
@@ -375,6 +434,7 @@ def create_service_iterable(app_id, n, yaml_file = None, start_no = None, stop_n
         if yaml_file is None:
             db_execute("insert into tb_ctn (app_id, no) values ('" + str(app_id) + "', '" + str(i) + "')")
     svc_iterable = svc_iterable + "\n" + network
+    svc_iterable = svc_iterable.replace("${id}", indent_char)
 
     yaml_file = yaml_file if yaml_file is not None else yaml_itr
     f = open(yaml_file, "w")
@@ -419,6 +479,7 @@ def get_top_app_container_image(app):
     return list_resp[0] if len(list_resp) > 0 else None
     
 def app_createdb():
+    global indent_char
     app = args.app_name
     if args.force: db_reset()
     row_app = db_execute("select * from tb_app where name = '" + app + "'")
@@ -431,11 +492,21 @@ def app_createdb():
         if image is not None:
             tpl_dc = tpl_default
             tpl_dc = tpl_dc.replace("${image}", image)
+            indent_char = get_indent(1)
+            tpl_dc = tpl_dc.replace("${id}", indent_char)
         else:
             file_dc = args.file
             file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
             f = open(file_dc, 'r')
             tpl_dc = f.read()
+            f.close()
+            ok, msg, new_indent_char = check_indentation(tpl_dc)
+            if ok:
+                indent_char = new_indent_char
+            else:
+                print("Error: " + msg)
+                print("Please fix the indentation in your " + file_dc + " file")
+                sys.exit(1)
         
         # create app record
         db_execute("insert into tb_app (name, ports, tpl_dc) values ('" \
@@ -470,6 +541,7 @@ def app_createdb():
         print("Run \"" + app_name + " start\" to start " + row_app[0][1] + " application now")
 
 def app_create():
+    global indent_char
     app = args.app_name
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==0:
@@ -482,12 +554,22 @@ def app_create():
         if image is not None:
             tpl_dc = tpl_default
             tpl_dc = tpl_dc.replace("${image}", image)
+            indent_char = get_indent(1)
+            tpl_dc = tpl_dc.replace("${id}", indent_char)
         else:
             file_dc = args.file
             file_dc = file_dc if file_dc is not None else "docker-compose.yaml.template"
             f = open(file_dc, 'r')
             tpl_dc = f.read()
-        
+            f.close()
+            ok, msg, new_indent_char = check_indentation(tpl_dc)
+            if ok:
+                indent_char = new_indent_char
+            else:
+                print("Error: " + msg)
+                print("Please fix the indentation in your " + file_dc + " file")
+                sys.exit(1)
+
         # create app record
         db_execute("insert into tb_app (name, ports, tpl_dc) values ('" \
             + app + "', '" + ports + "', '" + db_escape_field(tpl_dc) + "')")
@@ -609,16 +691,20 @@ def get_container_network_name(container_name):
 def app_delete():
     row = db_execute("select * from tb_app limit 0,1")
     if len(row)==1:
+        app_id = row[0][0]
         app = row[0][1]
         
-        resp = run_docker_command("ps -a -f \"name=^" + app + "-[^-]+$\" --format {{.Names}}")
-        if(len(resp)>0):
-            for container in resp:
-                print("Deleting app resource " + container)
-                resp = stop_delete_container(container)
-                if resp == "":
-                    print("Failed!")
-                    
+        # resp = run_docker_command("ps -a -f \"name=^" + app + "-[^-]+$\" --format {{.Names}}")
+        # if(len(resp)>0):
+        #     for container in resp:
+        #         print("Deleting app resource " + container)
+        #         resp = stop_delete_container(container)
+        #         if resp == "":
+        #             print("Failed!")
+        
+        create_service_full(app_id, yaml_full)
+        docker_compose(yaml_full, "", True, "down")
+        
         print("Deleting app network " + app + "-net")
         resp = run_docker_command("network rm " + app + "-net")
         if len(resp)>0:
@@ -734,6 +820,9 @@ def app_update():
         app_id = row_app[0][0]
         app = row_app[0][1]
         tpl_dc = row_app[0][3]
+        
+        global indent_char
+        ok, msg, indent_char = check_indentation(tpl_dc)
         
         # get main container image
         dc = replace_variable(tpl_dc)
