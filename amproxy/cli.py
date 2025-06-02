@@ -15,6 +15,97 @@ import argparse
 # if error running executable binary, run to fix:
 # sudo mount /tmp -o remount,exec
 
+# ================================== #
+# ========== Declarations ========== #
+# ================================== #
+
+# args
+parser = None
+args = None
+obj_replace = {}
+
+app_title = "AMProxy"
+app_name = "amproxy"
+
+# prepare directory
+tmpdir = "auto_generated"
+dir_cfg = tmpdir + "/cfg"
+dir_db = tmpdir + "/db"
+file_db = dir_db + "/" + app_name + ".db"
+
+# temp yaml
+yaml_proxy = "_proxy.yaml"
+yaml_non_itr = "_non_itr.yaml"
+yaml_itr = "_itr.yaml"
+yaml_full = "docker-compose.yaml"
+yaml_logs = "_logs.yaml"
+
+tpl_proxy = '''
+    ${app}-proxy:
+        image: haproxytech/haproxy-alpine
+        container_name: ${app}-proxy
+        restart: always
+        ports:
+            - ${external_port}:80
+            - ${statistic_port}:8404
+        volumes:
+            - ./auto_generated/cfg:/usr/local/etc/haproxy:ro
+'''
+
+tpl_network = '''
+networks:
+    ${app}-net:
+        external: true
+'''
+
+tpl_cfg = '''
+global
+    stats socket /var/run/api.sock user haproxy group haproxy mode 660 level admin expose-fd listeners
+    log stdout format raw local0 info
+
+defaults
+    mode http
+    timeout client 600s
+    timeout connect 600s
+    timeout server 600s
+    timeout http-request 600s
+    log global
+
+frontend stats
+    bind *:8404
+    stats enable
+    stats uri /
+    stats refresh 10s
+
+frontend ${app}-frontend
+    bind :80
+    default_backend ${app}-backend
+
+backend ${app}-backend
+'''
+
+tpl_default = '''
+---
+services:
+### NON ITERABLE CONTAINER BLOCK ###
+### ITERABLE CONTAINER BLOCK ###
+    ${app}-${no}:
+        image: ${image}
+        container_name: ${app}-${no}
+        restart: always
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+'''
+
+tpl_container_network = "        " + "networks:\n" + "            " + "- ${app}-net"
+tpl_backend_server = "server s${no} ${app}-${no}:${container_port} check"
+
+
+# ================================== #
+# =========== Functions ============ #
+# ================================== #
+
+
 def signal_handler(sig, frame):
     sys.exit(0)
 
@@ -885,9 +976,10 @@ def get_git_info():
     }
     
 def main():
-    global parser
-    global args
-    parser = argparse.ArgumentParser(description="AMProxy - Load balancer for multiple docker containers")
+    # capture CTRL + C
+    signal.signal(signal.SIGINT, signal_handler)
+
+    parser = argparse.ArgumentParser(description= app_title + " - Load balancer for multiple docker containers")
     
     # debug flag
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
@@ -918,8 +1010,8 @@ example:
 
     # createdb command
     createdb_parser = subparsers.add_parser("createdb",
-        help="Create database from an already running AMProxy application",
-        description="Create database from an already running AMProxy application"
+        help="Create database from an already running " + app_title +" application",
+        description="Create database from an already running " + app_title + " application"
     )
     createdb_parser.add_argument("app_name", help="Name of the application")
     createdb_parser.add_argument("-fo", "--force", action="store_true", help="Force reset application database")
@@ -1029,145 +1121,64 @@ example:
     digest_parser.set_defaults(func=app_digest)
 
     args = parser.parse_args()
+    
+    if not (args.version or args.command in ["docker", None]):
+        if not os.path.exists(tmpdir):
+            os.mkdir(tmpdir)
+        if not os.path.exists(dir_cfg):
+            os.mkdir(dir_cfg)
+        if not os.path.exists(dir_db):
+            os.mkdir(dir_db)
 
-# capture CTRL + C
-signal.signal(signal.SIGINT, signal_handler)
-
-# args
-parser = None
-args = None
-
-main()
-
-app_title = "AMProxy"
-app_name = "amproxy"
-
-tpl_proxy = '''
-    ${app}-proxy:
-        image: haproxytech/haproxy-alpine
-        container_name: ${app}-proxy
-        restart: always
-        ports:
-            - ${external_port}:80
-            - ${statistic_port}:8404
-        volumes:
-            - ./auto_generated/cfg:/usr/local/etc/haproxy:ro
-'''
-
-tpl_network = '''
-networks:
-    ${app}-net:
-        external: true
-'''
-
-tpl_cfg = '''
-global
-    stats socket /var/run/api.sock user haproxy group haproxy mode 660 level admin expose-fd listeners
-    log stdout format raw local0 info
-
-defaults
-    mode http
-    timeout client 600s
-    timeout connect 600s
-    timeout server 600s
-    timeout http-request 600s
-    log global
-
-frontend stats
-    bind *:8404
-    stats enable
-    stats uri /
-    stats refresh 10s
-
-frontend ${app}-frontend
-    bind :80
-    default_backend ${app}-backend
-
-backend ${app}-backend
-'''
-
-tpl_default = '''
----
-services:
-### NON ITERABLE CONTAINER BLOCK ###
-### ITERABLE CONTAINER BLOCK ###
-    ${app}-${no}:
-        image: ${image}
-        container_name: ${app}-${no}
-        restart: always
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
-'''
-
-tpl_container_network = "        " + "networks:\n" + "            " + "- ${app}-net"
-tpl_backend_server = "server s${no} ${app}-${no}:${container_port} check"
-
-# prepare directory
-# print(os.getcwd())
-tmpdir = "auto_generated"
-dir_cfg = tmpdir + "/cfg"
-dir_db = tmpdir + "/db"
-file_db = dir_db + "/" + app_name + ".db"
-
-# temp yaml
-yaml_proxy = "_proxy.yaml"
-yaml_non_itr = "_non_itr.yaml"
-yaml_itr = "_itr.yaml"
-yaml_full = "docker-compose.yaml"
-yaml_logs = "_logs.yaml"
-
-if not (args.version or args.command in ["docker", None]):
-    if not os.path.exists(tmpdir):
-        os.mkdir(tmpdir)
-    if not os.path.exists(dir_cfg):
-        os.mkdir(dir_cfg)
-    if not os.path.exists(dir_db):
-        os.mkdir(dir_db)
-
-# prepare database
-if not (args.version or args.command in ["docker", None]):
-    if not os.path.exists(file_db):
-        conn = sqlite3.connect(file_db)
-        conn.execute('''CREATE TABLE tb_app
-                    (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name            CHAR(255),
-                        ports           CHAR(50),
-                        tpl_dc          TEXT
-                    );''')
-        conn.execute("CREATE INDEX app_idx_name ON tb_app (name);")
-        conn.execute('''CREATE TABLE tb_ctn
-                    (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        app_id  INT,
-                        no      INT
-                    );''')
-        conn.execute("CREATE INDEX container_idx_app_id ON tb_ctn (app_id);")
-        conn.execute("CREATE INDEX container_idx_app_id_no ON tb_ctn (app_id, no);")
-        conn.close()
-
-obj_replace = {}
-
-if args.debug:
+    # prepare database
+    if not (args.version or args.command in ["docker", None]):
+        if not os.path.exists(file_db):
+            conn = sqlite3.connect(file_db)
+            conn.execute('''CREATE TABLE tb_app
+                        (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name            CHAR(255),
+                            ports           CHAR(50),
+                            tpl_dc          TEXT
+                        );''')
+            conn.execute("CREATE INDEX app_idx_name ON tb_app (name);")
+            conn.execute('''CREATE TABLE tb_ctn
+                        (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            app_id  INT,
+                            no      INT
+                        );''')
+            conn.execute("CREATE INDEX container_idx_app_id ON tb_ctn (app_id);")
+            conn.execute("CREATE INDEX container_idx_app_id_no ON tb_ctn (app_id, no);")
+            conn.close()
+            
+    if args.debug:
         print("[DEBUG] Args parsed:")
         print(vars(args))
 
-if args.version:
-    info = get_git_info()
-    version = info['version']
-    version_comment = info['message']
+    if args.version:
+        info = get_git_info()
+        version = info['version']
+        version_comment = info['message']
 
-    print("AMProxy " + version)
-    print("Version Message: " + version_comment)
-    print("License: GNU General Public License v3")
-    print("Author: Aris Munawar, S. T., M. Sc.")
-    print("Repositories:")
-    print("- Medium: https://medium.com/@areesmoon")
-    print("- Github: https://github.com/areesmoon/")
-    print("- Docker: https://hub.docker.com/u/areesmoon")
-    sys.exit()
+        print("AMProxy " + version)
+        print("Version Message: " + version_comment)
+        print("License: GNU General Public License v3")
+        print("Author: Aris Munawar, S. T., M. Sc.")
+        print("Repositories:")
+        print("- Medium: https://medium.com/@areesmoon")
+        print("- Github: https://github.com/areesmoon/")
+        print("- Docker: https://hub.docker.com/u/areesmoon")
+        sys.exit()
 
-if hasattr(args, "func"):
-    args.func()
-else:
-    parser.print_help()
+    if hasattr(args, "func"):
+        args.func()
+    else:
+        parser.print_help()
+        
+# ================================== #
+# ========== Entry Point =========== #
+# ================================== #
+
+if __name__ == "__main__":
+    main()

@@ -3,7 +3,8 @@
 
 # But not these files...
 !.gitignore
-!amproxy.py
+!amproxy/
+!amproxy/**
 !template.latex
 !docker-compose.yaml.template
 !make
@@ -13,3 +14,5 @@
 !hooks/
 !hooks/**
 !requirements.txt
+!release.sh
+!setup.py
