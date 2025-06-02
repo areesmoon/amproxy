@@ -6,5 +6,5 @@
 # Pip libraries:
 # - pyyaml
 # - pyinstaller
-pyinstaller --onefile --additional-hooks-dir=hooks amproxy.py
+pyinstaller --onefile --additional-hooks-dir=hooks amproxy/cli.py
 yes | cp dist/amproxy /usr/local/bin/

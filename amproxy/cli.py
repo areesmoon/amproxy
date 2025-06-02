@@ -27,6 +27,9 @@ obj_replace = {}
 app_title = "AMProxy"
 app_name = "amproxy"
 
+version = ""
+version_comment = ""
+
 # prepare directory
 tmpdir = "auto_generated"
 dir_cfg = tmpdir + "/cfg"
@@ -974,12 +977,49 @@ def get_git_info():
         "commit": commit_hash,
         "message": commit_msg
     }
+
+def app_profile():
+    info = get_git_info()
+    version = info['version']
+    commit = info['commit']
+    message = info['message']
     
+    return f"""
+=====================================================
+                      {app_title}
+=====================================================
+Version: {version}
+Commit: {commit}
+Message: {message}
+License: GNU General Public License v3
+Author: Aris Munawar, S. T., M. Sc.
+-----------------------------------------------------
+Profile & Repositories:
+- LinkedIn: https://www.linkedin.com/in/aris-munawar/
+- Medium  : https://medium.com/@areesmoon
+- GitHub  : https://github.com/areesmoon/
+- Docker  : https://hub.docker.com/u/areesmoon
+"""
+
 def main():
     # capture CTRL + C
     signal.signal(signal.SIGINT, signal_handler)
+    
+    info = get_git_info()
+    version = info['version']
+    version_comment = info['message']
 
-    parser = argparse.ArgumentParser(description= app_title + " - Load balancer for multiple docker containers")
+    parser = argparse.ArgumentParser(
+        prog="amproxy",
+        description=f"""
+=======================================================================================
+                                {app_title} - {version}
+---------------------------------------------------------------------------------------
+                      Load balancer for multiple docker containers
+=======================================================================================
+""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     
     # debug flag
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
@@ -1155,20 +1195,9 @@ example:
     if args.debug:
         print("[DEBUG] Args parsed:")
         print(vars(args))
-
+    
     if args.version:
-        info = get_git_info()
-        version = info['version']
-        version_comment = info['message']
-
-        print("AMProxy " + version)
-        print("Version Message: " + version_comment)
-        print("License: GNU General Public License v3")
-        print("Author: Aris Munawar, S. T., M. Sc.")
-        print("Repositories:")
-        print("- Medium: https://medium.com/@areesmoon")
-        print("- Github: https://github.com/areesmoon/")
-        print("- Docker: https://hub.docker.com/u/areesmoon")
+        print(app_profile())
         sys.exit()
 
     if hasattr(args, "func"):
