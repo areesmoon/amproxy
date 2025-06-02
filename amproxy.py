@@ -777,7 +777,7 @@ def app_top():
     else:
         info_app_not_found("get info")
         
-def app_proc():
+def app_ps():
     row_app = db_execute("select * from tb_app limit 0,1")
     if len(row_app)==1:
         app = row_app[0][1]
@@ -860,6 +860,29 @@ def app_docker(docker_args, debug=False):
     if debug:
         print("Running:", " ".join(params))
     subprocess.call(params)
+    
+def get_git_info():
+    try:
+        # Ambil latest tag (kalau ada)
+        tag = subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"]).decode().strip()
+    except subprocess.CalledProcessError:
+        tag = "no-tag"
+
+    try:
+        # Commit hash pendek
+        commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+
+        # Commit message terakhir
+        commit_msg = subprocess.check_output(["git", "log", "-1", "--pretty=%B"]).decode().strip()
+    except subprocess.CalledProcessError:
+        commit_hash = "unknown"
+        commit_msg = "No commit message found"
+
+    return {
+        "version": tag,
+        "commit": commit_hash,
+        "message": commit_msg
+    }
     
 def main():
     global parser
@@ -957,11 +980,11 @@ example:
     reset_parser.set_defaults(func=app_reset)
 
     # proc command
-    proc_parser = subparsers.add_parser("proc",
+    proc_parser = subparsers.add_parser("ps",
         help="To show running instance of backend service",
         description="To show running instance of backend service"
     )
-    proc_parser.set_defaults(func=app_proc)
+    proc_parser.set_defaults(func=app_ps)
 
     # top command
     top_parser = subparsers.add_parser("top",
@@ -1130,11 +1153,12 @@ if args.debug:
         print(vars(args))
 
 if args.version:
-    version = "v1.0.34"
-    version_comment = "Installation Ok"
+    info = get_git_info()
+    version = info['version']
+    version_comment = info['message']
 
     print("AMProxy " + version)
-    print("Version Comment: " + version_comment)
+    print("Version Message: " + version_comment)
     print("License: GNU General Public License v3")
     print("Author: Aris Munawar, S. T., M. Sc.")
     print("Repositories:")
