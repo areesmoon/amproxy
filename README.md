@@ -24,6 +24,12 @@ AMProxy is an easy-to-use manageable load balancer for multiple Docker container
 pip install git+https://github.com/areesmoon/amproxy.git
 ```
 
+Reinstallation
+
+```
+pip uinstall amproxy -y && pip install git+https://github.com/areesmoon/amproxy.git
+```
+
 ### Manual Installation
 
 First clone this project and then install required Python dependencies with:
