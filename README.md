@@ -6,6 +6,41 @@ AMProxy is an easy-to-use manageable load balancer for multiple Docker container
 
 ---
 
+## 🛠️ Requirements
+
+```text
+- Python >= 3.6
+- pip >= 9.0
+- git (required for installing via GitHub)
+```
+
+---
+
+## Installation
+
+### Quick Installation using Git
+
+```
+pip install git+https://github.com/areesmoon/amproxy.git
+```
+
+### Manual Installation
+
+First clone this project and then install required Python dependencies with:
+
+```
+pip install -r requirements.txt
+```
+
+Make the deploy script executable and run it:
+
+```
+chmod +x deploy
+./deploy
+```
+
+---
+
 ## Quick Start
 
 To start an application, first edit the provided `docker-compose.yaml.template` file according to your needs, then run:
@@ -21,27 +56,6 @@ amproxy create hello-world -p 81:80:82 --replicas=10
 ```
 
 This command creates an application named `hello-world` with 10 backend instances, forwarding ports accordingly.
-
----
-
-## Installation
-
-Before running AMProxy, install required Python dependencies with:
-
-```
-pip install -r requirements.txt
-```
-
----
-
-## Deployment
-
-Make the deploy script executable and run it:
-
-```
-chmod +x deploy
-./deploy
-```
 
 ---
 
@@ -94,6 +108,6 @@ Once started, your application is available at:
 
 ## License
 
-[MIT License](LICENSE)
+[GNU General Public License v3](LICENSE)
 
 ---
