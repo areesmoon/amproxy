@@ -9,7 +9,7 @@ import yaml
 import re
 import signal
 import argparse
-
+from .version import __version__, __commit__, __released__
 
 # NOTE:
 # if error running executable binary, run to fix:
@@ -26,9 +26,6 @@ obj_replace = {}
 
 app_title = "AMProxy"
 app_name = "amproxy"
-
-version = ""
-version_comment = ""
 
 # prepare directory
 tmpdir = "auto_generated"
@@ -954,43 +951,15 @@ def app_docker(docker_args, debug=False):
     if debug:
         print("Running:", " ".join(params))
     subprocess.call(params)
-    
-def get_git_info():
-    try:
-        # Ambil latest tag (kalau ada)
-        tag = subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"]).decode().strip()
-    except subprocess.CalledProcessError:
-        tag = "no-tag"
 
-    try:
-        # Commit hash pendek
-        commit_hash = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
-
-        # Commit message terakhir
-        commit_msg = subprocess.check_output(["git", "log", "-1", "--pretty=%B"]).decode().strip()
-    except subprocess.CalledProcessError:
-        commit_hash = "unknown"
-        commit_msg = "No commit message found"
-
-    return {
-        "version": tag,
-        "commit": commit_hash,
-        "message": commit_msg
-    }
-
-def app_profile():
-    info = get_git_info()
-    version = info['version']
-    commit = info['commit']
-    message = info['message']
-    
+def app_version():
     return f"""
 =====================================================
                       {app_title}
 =====================================================
-Version: {version}
-Commit: {commit}
-Message: {message}
+Version: {__version__}
+Commit: {__commit__}
+Released: {__released__}
 License: GNU General Public License v3
 Author: Aris Munawar, S. T., M. Sc.
 -----------------------------------------------------
@@ -1005,15 +974,11 @@ def main():
     # capture CTRL + C
     signal.signal(signal.SIGINT, signal_handler)
     
-    info = get_git_info()
-    version = info['version']
-    version_comment = info['message']
-
     parser = argparse.ArgumentParser(
         prog="amproxy",
         description=f"""
 =======================================================================================
-                                {app_title} - {version}
+                                {app_title} - {__version__}
 ---------------------------------------------------------------------------------------
                       Load balancer for multiple docker containers
 =======================================================================================
@@ -1197,7 +1162,7 @@ example:
         print(vars(args))
     
     if args.version:
-        print(app_profile())
+        print(app_version())
         sys.exit()
 
     if hasattr(args, "func"):
