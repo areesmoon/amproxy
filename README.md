@@ -27,7 +27,7 @@ pip install git+https://github.com/areesmoon/amproxy.git
 Reinstallation
 
 ```
-pip uinstall amproxy -y && pip install git+https://github.com/areesmoon/amproxy.git
+pip uninstall amproxy -y && pip install git+https://github.com/areesmoon/amproxy.git
 ```
 
 ### Manual Installation
