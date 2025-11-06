@@ -21,6 +21,25 @@ from .version import __version__, __commit__, __released__
 # ========== Declarations ========== #
 # ================================== #
 
+# --- TAMBAHKAN KODE INI ---
+# Baca konfigurasi HAProxy dari setting.json
+default_haproxy_image = "haproxytech/haproxy-alpine"
+haproxy_image = default_haproxy_image
+config_file = "settings.json"
+
+if os.path.exists(config_file):
+    try:
+        with open(config_file, 'r') as f:
+            settings = json.load(f)
+            # Ambil image dari JSON, kalau gak ada, pakai default
+            haproxy_image = settings.get("haproxy_image", default_haproxy_image)
+    except json.JSONDecodeError:
+        # Cetak error ke stderr biar gak ganggu output normal
+        print(f"Warning: File '{config_file}' format JSON-nya salah. Pakai image default.", file=sys.stderr)
+    except Exception as e:
+        print(f"Warning: Gagal baca '{config_file}' ({e}). Pakai image default.", file=sys.stderr)
+# --- BATAS KODE TAMBAHAN ---
+
 # args
 parser = None
 args = None
@@ -43,16 +62,16 @@ yaml_non_itr = "_non_itr.yaml"
 yaml_itr = "_itr.yaml"
 yaml_logs = "_logs.yaml"
 
-tpl_proxy = '''
-${id}${app}-proxy:
-${id}${id}image: haproxytech/haproxy-alpine
-${id}${id}container_name: ${app}-proxy
-${id}${id}restart: always
-${id}${id}ports:
-${id}${id}${id}- ${external_port}:80
-${id}${id}${id}- ${statistic_port}:8404
-${id}${id}volumes:
-${id}${id}${id}- ./auto_generated/cfg:/usr/local/etc/haproxy:ro
+tpl_proxy = f'''
+${{id}}${{app}}-proxy:
+${{id}}${{id}}image: {haproxy_image}
+${{id}}${{id}}container_name: ${{app}}-proxy
+${{id}}${{id}}restart: always
+${{id}}${{id}}ports:
+${{id}}${{id}}${{id}}- ${{external_port}}:80
+${{id}}${{id}}${{id}}- ${{statistic_port}}:8404
+${{id}}${{id}}volumes:
+${{id}}${{id}}${{id}}- ./auto_generated/cfg:/usr/local/etc/haproxy:ro
 '''
 
 tpl_network = '''
