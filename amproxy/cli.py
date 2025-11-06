@@ -23,7 +23,7 @@ from .version import __version__, __commit__, __released__
 
 # --- TAMBAHKAN KODE INI ---
 # Baca konfigurasi HAProxy dari setting.json
-default_haproxy_image = "haproxytech/haproxy-alpine"
+default_haproxy_image = "haproxytech/haproxy-alpine"    # ini adalah default
 haproxy_image = default_haproxy_image
 config_file = "settings.json"
 

@@ -1,0 +1,3 @@
+{
+  "haproxy_image": "haproxy:2.4.30-trixie"
+}
