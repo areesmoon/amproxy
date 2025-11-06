@@ -82,7 +82,7 @@ ${id}${id}external: true
 
 tpl_cfg = '''
 global
-    stats socket /var/run/api.sock user haproxy group haproxy mode 660 level admin expose-fd listeners
+    # stats socket /var/run/api.sock user haproxy group haproxy mode 660 level admin expose-fd listeners
     log stdout format raw local0 info
 
 defaults
